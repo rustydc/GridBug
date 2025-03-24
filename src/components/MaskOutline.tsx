@@ -116,6 +116,7 @@ const MaskOverlay: React.FC<{
 
 interface Props {
   image: ImageInfo;
+  mmPerPixel?: number;
   onConfirmOutline: (paths: Point[][], bitmap?: {
     url: string;
     width: number;
@@ -125,14 +126,16 @@ interface Props {
   onClose: () => void;
 }
 
-const MaskOutline: React.FC<Props> = ({ image, onConfirmOutline, onClose }) => {
+const MaskOutline: React.FC<Props> = ({ image, mmPerPixel, onConfirmOutline, onClose }) => {
   const [positivePoints, setPositivePoints] = useState<Point[]>([]);
   const [negativePoints, setNegativePoints] = useState<Point[]>([]);
   const [status, setStatus] = useState<string>('');
   const [maskUrl, setMaskUrl] = useState<string | null>(null);
   const [contours, setContours] = useState<Point[][]>([]);  // Changed from svgPaths
   const [simplification, setSimplification] = useState(0);
-  const [lineThickness, setLineThickness] = useState(2); // Default line thickness
+  const [lineThicknessMM, setLineThicknessMM] = useState(1.0); // Default padding in mm
+  // Convert mm to pixels and double for padding since line thickness of 5mm only pads by 2.5mm
+  const lineThickness = mmPerPixel ? (lineThicknessMM * 2) / mmPerPixel : 2;
   const workerRef = useRef<Worker | null>(null);
 
   const extractPathsFromSVG = (svgString: string): Point[][] => {
@@ -365,8 +368,12 @@ const MaskOutline: React.FC<Props> = ({ image, onConfirmOutline, onClose }) => {
   }, [contours, simplification, image, onConfirmOutline]);
 
   const handleLineThicknessChange = useCallback(async (event: Event, value: number | number[]) => {
-    const thickness = value as number;
-    setLineThickness(thickness);
+    const thicknessMM = value as number;
+    setLineThicknessMM(thicknessMM);
+    
+    // Convert mm to pixels and double the value for padding
+    // (line thickness of 5mm only pads by 2.5mm, so we double it)
+    const thickness = mmPerPixel ? (thicknessMM * 2) / mmPerPixel : thicknessMM * 2;
     
     // If we have the stored mask data, use it to avoid reprocessing the mask
     if (maskDataRef.current) {
@@ -389,7 +396,7 @@ const MaskOutline: React.FC<Props> = ({ image, onConfirmOutline, onClose }) => {
         setStatus('');
       }
     }
-  }, []);
+  }, [mmPerPixel]);
 
   return (
     <>
@@ -428,15 +435,16 @@ const MaskOutline: React.FC<Props> = ({ image, onConfirmOutline, onClose }) => {
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, p: 2 }}>
         <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
           <Typography sx={{ minWidth: '120px' }}>
-            Line thickness:
+            Padding (mm):
           </Typography>
           <Slider
-            value={lineThickness}
+            value={lineThicknessMM}
             valueLabelDisplay='auto'
+            valueLabelFormat={(value) => `${value} mm`}
             onChange={handleLineThicknessChange}
-            min={1}
-            max={10}
-            step={0.5}
+            min={0.1}
+            max={mmPerPixel ? 5 : 10}
+            step={0.1}
             sx={{ flexGrow: 1, mx: 2 }}
           />
         </Box>

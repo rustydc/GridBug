@@ -107,9 +107,10 @@ const ImageOutliner: React.FC<Props> = ({ image, onClose, onConfirmOutline }) =>
           onClose={onClose}
         />
       )}
-      {mode === 'outline' && (
+      {mode === 'outline' && boundsSizeMM && (
         <MaskOutline 
           image={currentImage} 
+          mmPerPixel={boundsSizeMM.width / currentImage.width}
           onConfirmOutline={(paths, bitmap) => {
             if (!boundsSizeMM) return;
 
