@@ -132,6 +132,7 @@ const MaskOutline: React.FC<Props> = ({ image, onConfirmOutline, onClose }) => {
   const [maskUrl, setMaskUrl] = useState<string | null>(null);
   const [contours, setContours] = useState<Point[][]>([]);  // Changed from svgPaths
   const [simplification, setSimplification] = useState(0);
+  const [lineThickness, setLineThickness] = useState(2); // Default line thickness
   const workerRef = useRef<Worker | null>(null);
 
   const extractPathsFromSVG = (svgString: string): Point[][] => {
@@ -145,6 +146,57 @@ const MaskOutline: React.FC<Props> = ({ image, onConfirmOutline, onClose }) => {
     }
     return paths;
   };
+
+  const renderSvgToCanvas = (svgString: string, lineWidth: number): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      // Create a new canvas
+      const canvas = document.createElement('canvas');
+      canvas.width = image.width;
+      canvas.height = image.height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        reject(new Error('Could not get canvas context'));
+        return;
+      }
+      
+      // Fill the canvas with white
+      ctx.fillStyle = 'white';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      // Modify the SVG to add a stroke with lineWidth while keeping the black fill
+      // Original SVG has: stroke="none" fill="black" fill-rule="evenodd"
+      const modifiedSvg = svgString.replace(
+        /(stroke=)"none"(.*?)(fill=)"black"(.*?)(fill-rule=)"evenodd"/,
+        `$1"black"$2$3"black"$4$5"evenodd" stroke-width="${lineWidth}"`
+      );
+      
+      // Create an SVG image
+      const img = new Image();
+      img.onload = () => {
+        // Draw the modified SVG
+        ctx.drawImage(img, 0, 0);
+        
+        // Return the canvas data URL
+        resolve(canvas.toDataURL());
+      };
+      img.onerror = () => {
+        reject(new Error('Failed to load SVG'));
+      };
+      
+      // Create a Blob URL from the modified SVG string
+      const blob = new Blob([modifiedSvg], { type: 'image/svg+xml' });
+      img.src = URL.createObjectURL(blob);
+    });
+  };
+
+  // Store the current mask data for reuse when only lineThickness changes
+  const maskDataRef = useRef<{
+    mask: any;
+    scores: number[];
+    bestIndex: number;
+    bwDataUrl: string;
+    initialSvgString: string;
+  } | null>(null);
 
   // Initialize worker and start segmentation
   useEffect(() => {
@@ -218,15 +270,42 @@ const MaskOutline: React.FC<Props> = ({ image, onConfirmOutline, onClose }) => {
           bwImgData.data[idx+3] = 255;          // A (fully opaque)
         }
         bwCtx.putImageData(bwImgData, 0, 0);
+        const bwDataUrl = bwCanvas.toDataURL();
         
-        // Process with Potrace
-        setStatus('Generating SVG outline...');
-        Potrace.loadImageFromUrl(bwCanvas.toDataURL());
-        Potrace.process(function(){
-          const svgString = Potrace.getSVG(1);
-          const paths = extractPathsFromSVG(svgString);
-          setContours(paths);
-          setStatus('');
+        // Process with the first Potrace
+        setStatus('Generating initial SVG outline...');
+        Potrace.loadImageFromUrl(bwDataUrl);
+        Potrace.process(async function(){
+          // Get the first SVG from potrace
+          const initialSvgString = Potrace.getSVG(1);
+          
+          // Store mask data for reuse when lineThickness changes
+          maskDataRef.current = {
+            mask,
+            scores,
+            bestIndex,
+            bwDataUrl,
+            initialSvgString
+          };
+          
+          try {
+            setStatus('Rendering SVG to canvas with line thickness...');
+            // Render the SVG to a canvas with the specified line thickness
+            const canvasUrl = await renderSvgToCanvas(initialSvgString, lineThickness);
+            
+            // Run Potrace on the thickened SVG
+            setStatus('Processing thickened SVG...');
+            Potrace.loadImageFromUrl(canvasUrl);
+            Potrace.process(function(){
+              const finalSvgString = Potrace.getSVG(1);
+              const paths = extractPathsFromSVG(finalSvgString);
+              setContours(paths);
+              setStatus('');
+            });
+          } catch (error) {
+            console.error('Error in SVG processing:', error);
+            setStatus('');
+          }
         });
       }
     };
@@ -236,6 +315,9 @@ const MaskOutline: React.FC<Props> = ({ image, onConfirmOutline, onClose }) => {
 
   // Send point queries when points change
   useEffect(() => {
+    // Reset the stored mask data
+    maskDataRef.current = null;
+    
     if (positivePoints.length === 0 && negativePoints.length === 0) {
       setMaskUrl(null);
       return;
@@ -282,6 +364,33 @@ const MaskOutline: React.FC<Props> = ({ image, onConfirmOutline, onClose }) => {
     }
   }, [contours, simplification, image, onConfirmOutline]);
 
+  const handleLineThicknessChange = useCallback(async (event: Event, value: number | number[]) => {
+    const thickness = value as number;
+    setLineThickness(thickness);
+    
+    // If we have the stored mask data, use it to avoid reprocessing the mask
+    if (maskDataRef.current) {
+      try {
+        setStatus('Rendering SVG to canvas with new line thickness...');
+        // Render the SVG to a canvas with the new line thickness
+        const canvasUrl = await renderSvgToCanvas(maskDataRef.current.initialSvgString, thickness);
+        
+        // Run Potrace on the thickened SVG
+        setStatus('Processing thickened SVG...');
+        Potrace.loadImageFromUrl(canvasUrl);
+        Potrace.process(function(){
+          const finalSvgString = Potrace.getSVG(1);
+          const paths = extractPathsFromSVG(finalSvgString);
+          setContours(paths);
+          setStatus('');
+        });
+      } catch (error) {
+        console.error('Error in SVG processing:', error);
+        setStatus('');
+      }
+    }
+  }, []);
+
   return (
     <>
       <Box sx={{ position: 'relative', width: '100%', height: '100%' }}>
@@ -316,20 +425,36 @@ const MaskOutline: React.FC<Props> = ({ image, onConfirmOutline, onClose }) => {
           </Box>
         )}
       </Box>
-      <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', p: 2 }}>
-        <Typography>
-          Simplify contour:
-        </Typography>
-        <Slider
-          value={simplification}
-          valueLabelDisplay='auto'
-          onChange={(_, value) => setSimplification(value as number)}
-          min={0}
-          max={100}
-          step={1}
-          sx={{ flexGrow: 1, mx: 2 }}
-        />
-        <Box sx={{ display: 'flex', gap: 2 }}>
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, p: 2 }}>
+        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+          <Typography sx={{ minWidth: '120px' }}>
+            Line thickness:
+          </Typography>
+          <Slider
+            value={lineThickness}
+            valueLabelDisplay='auto'
+            onChange={handleLineThicknessChange}
+            min={1}
+            max={10}
+            step={0.5}
+            sx={{ flexGrow: 1, mx: 2 }}
+          />
+        </Box>
+        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+          <Typography sx={{ minWidth: '120px' }}>
+            Simplify contour:
+          </Typography>
+          <Slider
+            value={simplification}
+            valueLabelDisplay='auto'
+            onChange={(_, value) => setSimplification(value as number)}
+            min={0}
+            max={100}
+            step={1}
+            sx={{ flexGrow: 1, mx: 2 }}
+          />
+        </Box>
+        <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end' }}>
           <Button onClick={handleClear}>Clear Points</Button>
           <Button 
             variant="contained" 
