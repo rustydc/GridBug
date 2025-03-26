@@ -279,7 +279,9 @@ const MainCanvas: React.FC = () => {
     const centerScreen = centerPoint.matrixTransform(screenCTM);
     
     // Current mouse position in screen coordinates
-    const mousePoint = { x: window.event?.clientX || 0, y: window.event?.clientY || 0 };
+    // Using MouseEvent properties for a more type-safe approach
+    const ev = window.event as MouseEvent | undefined;
+    const mousePoint = { x: ev?.clientX || 0, y: ev?.clientY || 0 };
     
     // Calculate initial angle in screen space
     const initialAngle = calculateAngleFromVertical({ x: centerScreen.x, y: centerScreen.y }, mousePoint);

@@ -2,6 +2,12 @@
 // Use a separate function to handle the import to avoid top-level await
 let transformersModule: any;
 
+// Define a type for the imported module to avoid TS errors
+declare module 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.3.3' {
+  const content: any;
+  export default content;
+}
+
 async function loadTransformers() {
   try {
     transformersModule = await import("https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.3.3");

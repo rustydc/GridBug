@@ -92,10 +92,11 @@ const Outline: React.FC<OutlineProps> = ({
     const svg = svgRef.current;  // Use stored reference instead
     if (!svg) return;
 
-    const pt = svg.createSVGPoint();
+    const svgElement = svg as SVGSVGElement;
+    const pt = svgElement.createSVGPoint();
     pt.x = e.clientX;
     pt.y = e.clientY;
-    const svgP = pt.matrixTransform(svg.getScreenCTM()?.inverse());
+    const svgP = pt.matrixTransform(svgElement.getScreenCTM()?.inverse());
 
     if (dragRef.current.pointIndex !== undefined) {
       const newPoints = [...points];

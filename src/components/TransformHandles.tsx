@@ -33,7 +33,9 @@ const TransformHandles: React.FC<Props> = ({ bounds, onRotate, rotation }) => {
 
   const handleRotateStart = (e: React.MouseEvent) => {
     e.stopPropagation();
-    const svg = e.currentTarget.ownerSVGElement;
+    // Type assertion to SVGElement, then access ownerSVGElement
+    const element = e.currentTarget as SVGElement;
+    const svg = element.ownerSVGElement;
     if (!svg) return;
     
     // Tell the MainCanvas component to start rotate mode

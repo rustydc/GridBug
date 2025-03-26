@@ -36,7 +36,7 @@ const MaskOverlay: React.FC<{
     
     onAddPoint(
       { x: normalizedX, y: normalizedY },
-      !(e.button === 2 || e.shiftKey) // isPositive = true for left click without shift
+      !(e.button === 2 || e.shiftKey as boolean) // isPositive = true for left click without shift
     );
   }, [screenToImageCoords, imageWidth, imageHeight, onAddPoint]);
 
@@ -205,6 +205,7 @@ const MaskOutline: React.FC<Props> = ({ image, mmPerPixel, onConfirmOutline, onC
   useEffect(() => {
     workerRef.current = new Worker(new URL('../utils/worker.ts', import.meta.url), { type: 'module' });
     setStatus('Loading model...');
+    if (!workerRef.current) return;
     workerRef.current.onmessage = async (e) => {
       if (e.data.type === 'ready') {
         console.log("Ready.")
@@ -218,7 +219,7 @@ const MaskOutline: React.FC<Props> = ({ image, mmPerPixel, onConfirmOutline, onC
         return;
       }
       
-      if (e.data.type === 'ready') {
+      if (e.data.type === 'ready' && workerRef.current) {
         workerRef.current.postMessage({
           type: 'segment',
           data: image.url
