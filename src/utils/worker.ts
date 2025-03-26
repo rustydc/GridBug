@@ -41,20 +41,32 @@ export class SegmentAnythingSingleton {
 
 // State variables
 let image_embeddings: Tensor | null = null;
-
-
 let image_inputs: ImageInputs | null = null;
 let ready = false;
+let model: SamModel;
+let processor: AutoProcessor;
 
-const [model, processor] = await SegmentAnythingSingleton.getInstance();
-
-if (!ready) {
-    // Indicate that we are ready to accept requests
-    ready = true;
-    self.postMessage({
-        type: 'ready',
-    });
+// Initialize the worker
+async function init() {
+    try {
+        [model, processor] = await SegmentAnythingSingleton.getInstance();
+        
+        // Indicate that we are ready to accept requests
+        ready = true;
+        self.postMessage({
+            type: 'ready',
+        });
+    } catch (error) {
+        console.error('Failed to initialize worker:', error);
+        self.postMessage({
+            type: 'error',
+            error: 'Failed to initialize model',
+        });
+    }
 }
+
+// Start initialization
+init();
 
 
 self.onmessage = async (e) => {

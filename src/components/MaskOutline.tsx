@@ -203,7 +203,7 @@ const MaskOutline: React.FC<Props> = ({ image, mmPerPixel, onConfirmOutline, onC
 
   // Initialize worker and start segmentation
   useEffect(() => {
-    workerRef.current = new Worker('/src/utils/worker.js', { type: 'module' });
+    workerRef.current = new Worker(new URL('../utils/worker.ts', import.meta.url), { type: 'module' });
     setStatus('Loading model...');
     workerRef.current.onmessage = async (e) => {
       if (e.data.type === 'ready') {
@@ -212,9 +212,16 @@ const MaskOutline: React.FC<Props> = ({ image, mmPerPixel, onConfirmOutline, onC
         if(!workerRef.current) {
             throw new Error('Worker not initialized');
         }
+      } else if (e.data.type === 'error') {
+        console.error('Worker error:', e.data.error);
+        setStatus(`Error: ${e.data.error}`);
+        return;
+      }
+      
+      if (e.data.type === 'ready') {
         workerRef.current.postMessage({
-            type: 'segment',
-            data: image.url
+          type: 'segment',
+          data: image.url
         });
       } else if (e.data.type === 'segment_result') {
         if (e.data.data === 'done') {
