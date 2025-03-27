@@ -74,16 +74,6 @@ const TransformHandles: React.FC<Props> = ({ bounds, onRotate, rotation }) => {
         strokeWidth={strokeWidth}
         strokeDasharray={`${4/effectiveZoomFactor}`}
       />
-      
-      {/* Debug text showing rotation angle */}
-      <text
-        x={center.x + 15}
-        y={bounds.minY - rotateHandleOffset}
-        fill="red"
-        fontSize={12 / effectiveZoomFactor}
-      >
-        {rotation.toFixed(1)}°
-      </text>
     </g>
   );
 };
