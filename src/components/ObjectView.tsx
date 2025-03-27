@@ -78,7 +78,7 @@ const ObjectView: React.FC<Props> = ({ currentImage, onObjectConfirm, onClose })
       <g 
         onMouseDown={handleMouseDown} 
         onMouseMove={handleMouseMove}
-        style={{ cursor: 'crosshair', pointerEvents: 'bounding-box' }}
+        style={{ cursor: 'crosshair', pointerEvents: 'bounding-box' as React.CSSProperties['pointerEvents'] }}
       >
         {rectToDraw && (
           <rect

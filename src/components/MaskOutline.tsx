@@ -26,7 +26,7 @@ const MaskOverlay: React.FC<{
   const handleClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation(); // Don't trigger pan
     
-    if (e.button !== 0 && !(e.button === 0 && e.shiftKey)) return;
+    if (e.button !== 0 && (e.button !== 2 && !e.shiftKey)) return;
     
     const { x, y } = screenToImageCoords(e.clientX, e.clientY);
     

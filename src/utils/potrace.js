@@ -1223,7 +1223,9 @@ export default (function() {
     }
     bmToPathlist();
     processPath();
-    callback();
+    if (callback) {
+      callback();
+    }
     callback = null;
   }
 
