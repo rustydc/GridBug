@@ -15,27 +15,33 @@ export const calculateDistance = (p1: Point, p2: Point): number => {
   return Math.sqrt(dx * dx + dy * dy);
 };
 
+// Transform a point from local to canvas space with rotation and position
 export const transformPoint = (point: Point, position: Point, rotation: number): Point => {
-  // Expect rotation in radians now
-  const cos = Math.cos(rotation);
-  const sin = Math.sin(rotation);
-  const dx = point.x - position.x;
-  const dy = point.y - position.y;
+  // Convert degrees to radians
+  const rad = (rotation * Math.PI) / 180;
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+  
+  // Apply rotation and translation
   return {
-    x: dx * cos - dy * sin + position.x,
-    y: dx * sin + dy * cos + position.y  // Fix: use position.y instead of position.x
+    x: point.x * cos - point.y * sin + position.x,
+    y: point.x * sin + point.y * cos + position.y
   };
 };
 
+// Transform a point from canvas space to local space
 export const untransformPoint = (point: Point, position: Point, rotation: number): Point => {
-  // Expect rotation in radians now
-  const cos = Math.cos(-rotation);
-  const sin = Math.sin(-rotation);
+  // Convert degrees to radians (negative for inverse rotation)
+  const rad = (-rotation * Math.PI) / 180;
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+  
+  // Translate to origin, then apply inverse rotation
   const dx = point.x - position.x;
   const dy = point.y - position.y;
   return {
-    x: dx * cos - dy * sin + position.x,
-    y: dx * sin + dy * cos + position.y  // Fix: use position.y instead of position.x
+    x: dx * cos - dy * sin,
+    y: dx * sin + dy * cos
   };
 };
 

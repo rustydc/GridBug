@@ -2,6 +2,7 @@ import React, { useRef } from 'react';
 import { Outline as OutlineType, Point } from '../types';
 import { useStore } from '../store';
 import { generateSplinePath, findClosestPointOnCurve } from '../utils/spline';
+import { transformPoint, untransformPoint } from '../utils/geometry';
 import TransformHandles from './TransformHandles';
 
 interface OutlineProps extends OutlineType {
@@ -19,9 +20,11 @@ const Outline: React.FC<OutlineProps> = ({
   const centerX = (bounds.minX + bounds.maxX) / 2;
   const centerY = (bounds.minY + bounds.maxY) / 2;
   
-  // Rotate around shape's origin, not center
-  const transformString = `translate(${position.x}, ${position.y}) rotate(${rotation})`;
-  const pathD = generateSplinePath(points);
+  // Transform points to canvas space using shared utility function
+  const transformedPoints = points.map(point => transformPoint(point, position, rotation));
+  
+  // Generate spline path in canvas space
+  const pathD = generateSplinePath(transformedPoints);
   
   // Base handle sizes in user coordinates - will be adjusted for zoom
   const handleBaseSize = 6; // Increased from 4 to 6 for larger control points
@@ -78,11 +81,23 @@ const Outline: React.FC<OutlineProps> = ({
     pt.y = e.clientY;
     const svgP = pt.matrixTransform(svg.getScreenCTM()?.inverse());
 
-    dragRef.current = { 
-      startX: svgP.x - (pointIndex !== undefined ? points[pointIndex].x : position.x),
-      startY: svgP.y - (pointIndex !== undefined ? points[pointIndex].y : position.y),
-      pointIndex
-    };
+    // For point indices, we need to use the original (untransformed) points
+    if (pointIndex !== undefined) {
+      // Transform the SVG point to the outline's local coordinate system
+      const localPoint = untransformPoint(svgP, position, rotation);
+      
+      dragRef.current = { 
+        startX: localPoint.x - points[pointIndex].x,
+        startY: localPoint.y - points[pointIndex].y,
+        pointIndex
+      };
+    } else {
+      dragRef.current = { 
+        startX: svgP.x - position.x,
+        startY: svgP.y - position.y,
+        pointIndex
+      };
+    }
 
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
@@ -99,10 +114,13 @@ const Outline: React.FC<OutlineProps> = ({
     const svgP = pt.matrixTransform(svgElement.getScreenCTM()?.inverse());
 
     if (dragRef.current.pointIndex !== undefined) {
+      // Transform the SVG point to the outline's local coordinate system
+      const localPoint = untransformPoint(svgP, position, rotation);
+      
       const newPoints = [...points];
       newPoints[dragRef.current.pointIndex] = {
-        x: svgP.x - dragRef.current.startX,
-        y: svgP.y - dragRef.current.startY
+        x: localPoint.x - dragRef.current.startX,
+        y: localPoint.y - dragRef.current.startY
       };
       updateOutline(id, { points: newPoints });
     } else {
@@ -167,13 +185,9 @@ const Outline: React.FC<OutlineProps> = ({
     const svgP = pt.matrixTransform(svg.getScreenCTM()?.inverse());
 
     // Transform click point to local space
-    const rad = (-rotation * Math.PI) / 180;
-    const cos = Math.cos(rad);
-    const sin = Math.sin(rad);
-    const localX = (svgP.x - position.x) * cos - (svgP.y - position.y) * sin;
-    const localY = (svgP.x - position.x) * sin + (svgP.y - position.y) * cos;
+    const localPoint = untransformPoint(svgP, position, rotation);
     
-    const { point, segment, distance } = findClosestPointOnCurve(points, { x: localX, y: localY });
+    const { point, segment, distance } = findClosestPointOnCurve(points, localPoint);
     
     // Only add point if clicking close to the path (within 5 units)
     if (distance <= 5) {
@@ -184,19 +198,8 @@ const Outline: React.FC<OutlineProps> = ({
   };
 
   return (
-    <g transform={transformString} onMouseDown={handleMouseDown}>
-      {/* Add bitmap display when in edit mode */}
-      {editMode && bitmap && (
-        <image
-          href={bitmap.url}
-          x={bitmap.position.x}
-          y={bitmap.position.y}
-          width={bitmap.width}
-          height={bitmap.height}
-          style={{ opacity: 0.3 }}
-        />
-      )}
-      
+    <>
+      {/* Render spline path directly in canvas space (no transform) */}
       <path
         d={pathD}
         fill={color}
@@ -205,41 +208,58 @@ const Outline: React.FC<OutlineProps> = ({
         strokeWidth={strokeWidth}
         onDoubleClick={handleDoubleClick}
         onClick={handlePathClick}
+        onMouseDown={(e) => handleMouseDown(e)}
       />
       
-      {editMode && points.map((point, i) => (
-        <g key={i}>
-          <circle
-            cx={point.x}
-            cy={point.y}
-            r={handleSize}
-            fill={selected ? "#2196f3" : color}
-            cursor="move"
-            onMouseDown={(e) => handleMouseDown(e, i)}
+      {/* Bitmap still needs the transform because it's in local space */}
+      <g transform={`translate(${position.x}, ${position.y}) rotate(${rotation})`}>
+        {editMode && bitmap && (
+          <image
+            href={bitmap.url}
+            x={bitmap.position.x}
+            y={bitmap.position.y}
+            width={bitmap.width}
+            height={bitmap.height}
+            style={{ opacity: 0.3 }}
           />
-          {points.length > 3 && (
+        )}
+        
+        {/* Render edit points in local coordinate system */}
+        {editMode && points.map((point, i) => (
+          <g key={i}>
             <circle
-              cx={point.x + deleteHandleOffset / zoomFactor}
-              cy={point.y - deleteHandleOffset / zoomFactor}
-              r={deleteHandleSize}
-              fill="red"
-              cursor="not-allowed"
-              onClick={(e) => handlePointDelete(i, e)}
+              cx={point.x}
+              cy={point.y}
+              r={handleSize}
+              fill={selected ? "#2196f3" : color}
+              cursor="move"
+              onMouseDown={(e) => handleMouseDown(e, i)}
             />
-          )}
-        </g>
-      ))}
+            {points.length > 3 && (
+              <circle
+                cx={point.x + deleteHandleOffset / zoomFactor}
+                cy={point.y - deleteHandleOffset / zoomFactor}
+                r={deleteHandleSize}
+                fill="red"
+                cursor="not-allowed"
+                onClick={(e) => handlePointDelete(i, e)}
+              />
+            )}
+          </g>
+        ))}
 
-      {selected && !editMode && (
-        <TransformHandles
-          points={points}
-          position={position}
-          rotation={rotation}
-          onRotate={handleRotateRequest}
-          bounds={bounds}
-        />
-      )}
-    </g>
+        {/* Keep transform handles in local space */}
+        {selected && !editMode && (
+          <TransformHandles
+            points={points}
+            position={position}
+            rotation={rotation}
+            onRotate={handleRotateRequest}
+            bounds={bounds}
+          />
+        )}
+      </g>
+    </>
   );
 };
 

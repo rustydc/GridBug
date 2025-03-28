@@ -3,6 +3,7 @@ import { useStore } from '../store';
 import Grid from './Grid';
 import Outline from './Outline';
 import { Point } from '../types';
+import { transformPoint } from '../utils/geometry';
 
 const MainCanvas: React.FC = () => {
   const { viewBox, setViewBox, outlines, clearSelection, setZoomFactor, updateOutline } = useStore();
@@ -124,22 +125,19 @@ const MainCanvas: React.FC = () => {
       const centerX = (outline.bounds.minX + outline.bounds.maxX) / 2;
       const centerY = (outline.bounds.minY + outline.bounds.maxY) / 2;
       
-      // Convert center to global coordinate space
-      const centerPoint = svg.createSVGPoint();
-      centerPoint.x = outline.position.x + centerX;
-      centerPoint.y = outline.position.y + centerY;
+      // Get center in canvas space accounting for current rotation
+      const centerCanvas = transformPoint({x: centerX, y: centerY}, outline.position, outline.rotation);
       
-      // Convert to screen coordinates
-      const screenCTM = svg.getScreenCTM();
-      if (!screenCTM) return;
+      // Convert mouse position from screen to canvas coordinates
+      const pt = svg.createSVGPoint();
+      pt.x = e.clientX;
+      pt.y = e.clientY;
+      const svgMatrix = svg.getScreenCTM()?.inverse();
+      if (!svgMatrix) return;
+      const mouseCanvas = pt.matrixTransform(svgMatrix);
       
-      const centerScreen = centerPoint.matrixTransform(screenCTM);
-      
-      // Current mouse position in screen coordinates
-      const mousePoint = { x: e.clientX, y: e.clientY };
-      
-      // Calculate current angle in screen space
-      const currentAngle = calculateAngleFromVertical({ x: centerScreen.x, y: centerScreen.y }, mousePoint);
+      // Calculate current angle in canvas space (not affected by rotation)
+      const currentAngle = calculateAngleFromVertical(centerCanvas, mouseCanvas);
       
       // Calculate angle delta from initial mouse angle
       let angleDelta = currentAngle - initialMouseAngle;
@@ -151,58 +149,43 @@ const MainCanvas: React.FC = () => {
       // Calculate new absolute rotation
       const newRotation = initialRotation + angleDelta;
       
-      // When we change rotation while keeping it around the origin (0,0),
-      // we need to adjust position to make it appear to rotate around the center
+      // Calculate where the origin (0,0) was before rotation (in canvas space)
+      const oldOriginX = initialPosition.x;
+      const oldOriginY = initialPosition.y;
       
-      // Calculate how the center point would move when rotated around origin
-      // For initial rotation
-      const initialRotationRad = initialRotation * Math.PI / 180;
-      const initialCenterRotatedX = centerX * Math.cos(initialRotationRad) - centerY * Math.sin(initialRotationRad);
-      const initialCenterRotatedY = centerX * Math.sin(initialRotationRad) + centerY * Math.cos(initialRotationRad);
+      // Use centerCanvas from above for consistent math
+      const localCenter = {
+        x: centerX,
+        y: centerY
+      };
       
-      // For new rotation
-      const newRotationRad = newRotation * Math.PI / 180;
-      const newCenterRotatedX = centerX * Math.cos(newRotationRad) - centerY * Math.sin(newRotationRad);
-      const newCenterRotatedY = centerX * Math.sin(newRotationRad) + centerY * Math.cos(newRotationRad);
+      // Transform to canvas space accounting for initial rotation
+      const centerCanvasInitial = transformPoint(localCenter, initialPosition, initialRotation);
       
-      // Calculate the position adjustment needed
-      const adjustX = newCenterRotatedX - initialCenterRotatedX;
-      const adjustY = newCenterRotatedY - initialCenterRotatedY;
+      // Calculate the angle change in radians
+      const angleChangeRad = ((newRotation - initialRotation) * Math.PI) / 180;
       
-      // Update the outline with the new rotation and adjusted position
-      // Starting from initialPosition ensures we don't accumulate errors
+      // Calculate where the origin should be after rotation around the center
+      // We're rotating the vector from center to origin
+      const originOffsetX = oldOriginX - centerCanvasInitial.x;
+      const originOffsetY = oldOriginY - centerCanvasInitial.y;
+      
+      const cos = Math.cos(angleChangeRad);
+      const sin = Math.sin(angleChangeRad);
+      
+      // Apply rotation matrix to the offset vector
+      const rotatedOffsetX = originOffsetX * cos - originOffsetY * sin;
+      const rotatedOffsetY = originOffsetX * sin + originOffsetY * cos;
+      
+      // New origin position = center + rotated offset
+      const newPosition = {
+        x: centerCanvasInitial.x + rotatedOffsetX,
+        y: centerCanvasInitial.y + rotatedOffsetY
+      };
+      
       updateOutline(rotatingOutlineId, { 
         rotation: newRotation,
-        position: {
-          x: initialPosition.x - adjustX,
-          y: initialPosition.y - adjustY
-        }
-      });
-      
-      // Debug logs for position adjustment
-      console.log('Position Adjustment:', {
-        centerX,
-        centerY,
-        initialRotationRad: initialRotationRad.toFixed(2),
-        newRotationRad: newRotationRad.toFixed(2),
-        adjustX: adjustX.toFixed(2),
-        adjustY: adjustY.toFixed(2),
-        initialPosition: {
-          x: initialPosition.x.toFixed(2),
-          y: initialPosition.y.toFixed(2)
-        },
-        newPosition: {
-          x: (initialPosition.x - adjustX).toFixed(2),
-          y: (initialPosition.y - adjustY).toFixed(2)
-        }
-      });
-      
-      // Debug logs
-      console.log('Rotation:', {
-        currentAngle,
-        initialAngle: initialMouseAngle,
-        delta: angleDelta,
-        newRotation
+        position: newPosition
       });
     }
   };
@@ -259,41 +242,33 @@ const MainCanvas: React.FC = () => {
     // We'll start rotation mode and track mouse moves in the canvas
     setRotatingOutlineId(outlineId);
     
-    // Store initial rotation and position
+    // Store initial rotation - we still need this to calculate relative angle change
     setInitialRotation(outline.rotation);
+    
+    // Store initial position for reference
     setInitialPosition({ x: outline.position.x, y: outline.position.y });
     
     // Calculate center of bounds for the outline in its own coordinate space
     const centerX = (outline.bounds.minX + outline.bounds.maxX) / 2;
     const centerY = (outline.bounds.minY + outline.bounds.maxY) / 2;
     
-    // Convert center to global coordinate space
-    const centerPoint = svg.createSVGPoint();
-    centerPoint.x = outline.position.x + centerX;
-    centerPoint.y = outline.position.y + centerY;
+    // Get center in canvas space using our transform function
+    const centerCanvas = transformPoint({x: centerX, y: centerY}, outline.position, outline.rotation);
     
-    // Convert to screen coordinates
-    const screenCTM = svg.getScreenCTM();
-    if (!screenCTM) return;
-    
-    const centerScreen = centerPoint.matrixTransform(screenCTM);
-    
-    // Current mouse position in screen coordinates
-    // Using MouseEvent properties for a more type-safe approach
+    // Get current mouse position and convert to canvas coordinates
     const ev = window.event as MouseEvent | undefined;
-    const mousePoint = { x: ev?.clientX || 0, y: ev?.clientY || 0 };
+    if (!ev) return;
     
-    // Calculate initial angle in screen space
-    const initialAngle = calculateAngleFromVertical({ x: centerScreen.x, y: centerScreen.y }, mousePoint);
+    const pt = svg.createSVGPoint();
+    pt.x = ev.clientX;
+    pt.y = ev.clientY;
+    const svgMatrix = svg.getScreenCTM()?.inverse();
+    if (!svgMatrix) return;
+    const mouseCanvas = pt.matrixTransform(svgMatrix);
+    
+    // Calculate initial angle in canvas space
+    const initialAngle = calculateAngleFromVertical(centerCanvas, mouseCanvas);
     setInitialMouseAngle(initialAngle);
-    
-    console.log('Starting rotation:', {
-      outlineId,
-      initialRotation: outline.rotation,
-      initialMouseAngle: initialAngle,
-      centerScreen: { x: centerScreen.x, y: centerScreen.y },
-      mouseScreen: mousePoint
-    });
   };
 
   useEffect(() => {
