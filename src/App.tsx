@@ -42,6 +42,9 @@ const App: React.FC = () => {
     const file = event.target.files?.[0];
     if (!file) return;
 
+    // Reset file input value so the same file can be selected again
+    event.target.value = '';
+    
     const url = URL.createObjectURL(file);
     const img = new Image();
     img.onload = () => {
