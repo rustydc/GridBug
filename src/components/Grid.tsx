@@ -1,29 +1,19 @@
 import React from 'react';
 import { useStore } from '../store';
-import { calculateMinimalGridArea } from '../utils/grid';
+import { calculateMinimalGridArea, GRID_SIZE, TOLERANCE } from '../utils/grid';
 
-const GRID_SIZE = 42; // 42mm grid size
 const CORNER_RADIUS = 7.5 / 2; // 7.5mm corner diameter
+const HALF_TOLERANCE = TOLERANCE / 2; // Half of tolerance for adjusting each edge
 
 const Grid: React.FC = () => {
   const { outlines } = useStore();
-  const { min, max } = calculateMinimalGridArea(outlines);
-  
-  // Extend min/max to nearest grid lines
-  const gridMin = {
-    x: Math.floor(min.x / GRID_SIZE) * GRID_SIZE,
-    y: Math.floor(min.y / GRID_SIZE) * GRID_SIZE
-  };
-  const gridMax = {
-    x: Math.ceil(max.x / GRID_SIZE) * GRID_SIZE,
-    y: Math.ceil(max.y / GRID_SIZE) * GRID_SIZE
-  };
+  const { min: gridMin, max: gridMax } = calculateMinimalGridArea(outlines);
 
   // Generate vertical and horizontal grid lines
   const verticalLines = [];
   const horizontalLines = [];
   
-  for (let x = gridMin.x + GRID_SIZE; x <= gridMax.x - GRID_SIZE; x += GRID_SIZE) {
+  for (let x = gridMin.x + GRID_SIZE - HALF_TOLERANCE; x <= gridMax.x - GRID_SIZE + HALF_TOLERANCE; x += GRID_SIZE) {
     verticalLines.push(
       <line
         key={`v${x}`}
@@ -38,7 +28,7 @@ const Grid: React.FC = () => {
     );
   }
 
-  for (let y = gridMin.y + GRID_SIZE; y <= gridMax.y - GRID_SIZE; y += GRID_SIZE) {
+  for (let y = gridMin.y + GRID_SIZE - HALF_TOLERANCE; y <= gridMax.y - GRID_SIZE + HALF_TOLERANCE; y += GRID_SIZE) {
     horizontalLines.push(
       <line
         key={`h${y}`}

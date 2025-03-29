@@ -2,7 +2,8 @@ import { Point, ViewBox, Outline } from '../types';
 import { calculateSplineBounds } from './spline';
 import { transformPoint } from './geometry';
 
-export const GRID_SIZE = 42; // Changed to 42mm
+export const GRID_SIZE = 42; // 42mm grid size
+export const TOLERANCE = 0.5; // 0.5mm tolerance for grid boundaries
 
 export const snapToGrid = (point: Point): Point => {
   return {
@@ -28,14 +29,24 @@ export const calculateMinimalGridArea = (outlines: Outline[]): { min: Point; max
   });
   
   const min = {
-    x: Math.floor(Math.min(...transformedBounds.map(b => b.minX)) / GRID_SIZE) * GRID_SIZE,
-    y: Math.floor(Math.min(...transformedBounds.map(b => b.minY)) / GRID_SIZE) * GRID_SIZE
-  };
-
+    x: Math.min(...transformedBounds.map(b => b.minX)),
+    y: Math.min(...transformedBounds.map(b => b.minY))
+  }
   const max = {
-    x: Math.ceil(Math.max(...transformedBounds.map(b => b.maxX)) / GRID_SIZE) * GRID_SIZE,
-    y: Math.ceil(Math.max(...transformedBounds.map(b => b.maxY)) / GRID_SIZE) * GRID_SIZE
+    x: Math.max(...transformedBounds.map(b => b.maxX)),
+    y: Math.max(...transformedBounds.map(b => b.maxY))
+  }
+
+
+  const minGrid = {
+    x: Math.floor((min.x - TOLERANCE / 2) / GRID_SIZE) * GRID_SIZE + TOLERANCE / 2,
+    y: Math.floor((min.y - TOLERANCE / 2) / GRID_SIZE) * GRID_SIZE + TOLERANCE / 2
+  };
+  const maxGrid = {
+    x: Math.ceil((max.x + TOLERANCE / 2) / GRID_SIZE) * GRID_SIZE - TOLERANCE / 2,
+    y: Math.ceil((max.y + TOLERANCE / 2) / GRID_SIZE) * GRID_SIZE - TOLERANCE / 2
   };
 
-  return { min, max };
+  console.log("minmax:", minGrid, maxGrid);
+  return { min: minGrid, max: maxGrid };
 };
