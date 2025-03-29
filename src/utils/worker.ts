@@ -68,6 +68,10 @@ let image_inputs: ImageInputs | null = null;
 let ready = false;
 let model: any;
 let processor: any;
+let currentImageUrl: string | null = null;
+let isProcessingSegment = false;
+let isProcessingDecode = false;
+let lastDecodeRequestJSON: string | null = null;
 
 // Initialize the worker
 async function init() {
@@ -114,6 +118,28 @@ self.onmessage = async (e) => {
             image_embeddings = null;
 
         } else if (type === 'segment') {
+            const imageUrl = e.data.data;
+            
+            // Skip if we're already processing this image or if it's the same as the last one
+            if (isProcessingSegment) {
+                console.log("Already processing a segment request, ignoring duplicate");
+                return;
+            }
+            
+            // If this is the same image we already processed, just say we're done
+            if (currentImageUrl === imageUrl && image_embeddings) {
+                console.log("Same image already segmented, skipping re-segmentation");
+                self.postMessage({
+                    type: 'segment_result',
+                    data: 'done',
+                });
+                return;
+            }
+            
+            // Mark that we're processing a segment request
+            isProcessingSegment = true;
+            currentImageUrl = imageUrl;
+            
             // Indicate that we are starting to segment the image
             self.postMessage({
                 type: 'segment_result',
@@ -121,18 +147,24 @@ self.onmessage = async (e) => {
             });
 
             console.log("Segmenting.");
-            // Read the image and recompute image embeddings
-            const image = await transformersModule.RawImage.read(e.data.data);
-            image_inputs = await processor(image);
-            image_embeddings = await model.get_image_embeddings(image_inputs);
+            
+            try {
+                // Read the image and recompute image embeddings
+                const image = await transformersModule.RawImage.read(imageUrl);
+                image_inputs = await processor(image);
+                image_embeddings = await model.get_image_embeddings(image_inputs);
 
-            console.log("Segmented.");
+                console.log("Segmented.");
 
-            // Indicate that we have computed the image embeddings, and we are ready to accept decoding requests
-            self.postMessage({
-                type: 'segment_result',
-                data: 'done',
-            });
+                // Indicate that we have computed the image embeddings, and we are ready to accept decoding requests
+                self.postMessage({
+                    type: 'segment_result',
+                    data: 'done',
+                });
+            } finally {
+                // Mark that we're done processing this segment request
+                isProcessingSegment = false;
+            }
 
         } else if (type === 'decode') {
             // Prepare inputs for decoding

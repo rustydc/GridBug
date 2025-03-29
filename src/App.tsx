@@ -12,7 +12,13 @@ import { parseSVGPath } from './utils/svgParser';
 import { generateSVG } from './utils/svgExport';
 
 const App: React.FC = () => {
-  const { addOutline, deleteOutline, outlines, centerView } = useStore();
+  const { 
+    addOutline, 
+    deleteOutline, 
+    outlines, 
+    centerView,
+    initializeWorker 
+  } = useStore();
   const { undo, redo } = useStore.temporal.getState();
   const [imageData, setImageData] = React.useState<ImageInfo | null>(null);
 
@@ -94,6 +100,19 @@ const App: React.FC = () => {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   };
+
+  // Initialize the segmentation worker when the app loads
+  useEffect(() => {
+    // Start loading the worker right away when the app initializes
+    console.log('Initializing segmentation worker...');
+    initializeWorker()
+      .then(worker => {
+        console.log('Segmentation worker initialized and ready');
+      })
+      .catch(error => {
+        console.error('Failed to initialize segmentation worker:', error);
+      });
+  }, [initializeWorker]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {

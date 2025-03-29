@@ -6,6 +6,7 @@ import { pathToPoints } from '../utils/svgPathParser';
 import ZoomableSvgView, { useZoomContext } from './ZoomableSvgView';
 import { generateSplinePath } from '../utils/spline';
 import { simplifyPoints } from '../utils/geometry';
+import { useStore } from '../store';
 
 // This component will be used inside ZoomableSvgView
 const MaskOverlay: React.FC<{
@@ -127,6 +128,7 @@ interface Props {
 }
 
 const MaskOutline: React.FC<Props> = ({ image, mmPerPixel, onConfirmOutline, onClose }) => {
+  const { segmentationWorker, workerReady, initializeWorker } = useStore();
   const [positivePoints, setPositivePoints] = useState<Point[]>([]);
   const [negativePoints, setNegativePoints] = useState<Point[]>([]);
   const [status, setStatus] = useState<string>('');
@@ -201,30 +203,41 @@ const MaskOutline: React.FC<Props> = ({ image, mmPerPixel, onConfirmOutline, onC
     initialSvgString: string;
   } | null>(null);
 
-  // Initialize worker and start segmentation
+  // Use the pre-initialized worker from the store
   useEffect(() => {
-    workerRef.current = new Worker(new URL('../utils/worker.ts', import.meta.url), { type: 'module' });
-    setStatus('Loading model...');
-    if (!workerRef.current) return;
-    workerRef.current.onmessage = async (e) => {
-      if (e.data.type === 'ready') {
-        console.log("Ready.")
+    if (segmentationWorker && workerReady) {
+      // Worker is already initialized and ready to use
+      workerRef.current = segmentationWorker;
+      setStatus('Preparing image...');
+      segmentationWorker.postMessage({
+        type: 'segment',
+        data: image.url
+      });
+    } else {
+      // Initialize worker if it doesn't exist yet
+      setStatus('Loading model...');
+      initializeWorker().then(worker => {
+        workerRef.current = worker;
         setStatus('Preparing image...');
-        if(!workerRef.current) {
-            throw new Error('Worker not initialized');
-        }
-      } else if (e.data.type === 'error') {
+        worker.postMessage({
+          type: 'segment',
+          data: image.url
+        });
+      }).catch(error => {
+        console.error('Failed to initialize worker:', error);
+        setStatus(`Error: ${error.message}`);
+      });
+    }
+    
+    // Set up message handler
+    const handleMessage = async (e: MessageEvent) => {
+      if (e.data.type === 'error') {
         console.error('Worker error:', e.data.error);
         setStatus(`Error: ${e.data.error}`);
         return;
       }
       
-      if (e.data.type === 'ready' && workerRef.current) {
-        workerRef.current.postMessage({
-          type: 'segment',
-          data: image.url
-        });
-      } else if (e.data.type === 'segment_result') {
+      if (e.data.type === 'segment_result') {
         if (e.data.data === 'done') {
           setStatus('');
         }
@@ -321,8 +334,19 @@ const MaskOutline: React.FC<Props> = ({ image, mmPerPixel, onConfirmOutline, onC
       }
     };
 
-    return () => workerRef.current?.terminate();
-  }, [image.url, image.width, image.height]);
+    // Register message handler for the worker
+    if (workerRef.current) {
+      workerRef.current.onmessage = handleMessage;
+    }
+
+    // Don't terminate the worker on unmount, as we're reusing it
+    return () => {
+      // Remove message handler but keep the worker alive
+      if (workerRef.current) {
+        workerRef.current.onmessage = null;
+      }
+    };
+  }, [segmentationWorker, workerReady, initializeWorker, image.url, image.width, image.height]);
 
   // Send point queries when points change
   useEffect(() => {
@@ -344,7 +368,7 @@ const MaskOutline: React.FC<Props> = ({ image, mmPerPixel, onConfirmOutline, onC
       type: 'decode',
       data: points
     });
-  }, [positivePoints, negativePoints, image.width, image.height]);
+  }, [positivePoints, negativePoints, image.width, image.height, workerRef.current]);
 
   const handleAddPoint = useCallback((point: Point, isPositive: boolean) => {
     if (isPositive) {
