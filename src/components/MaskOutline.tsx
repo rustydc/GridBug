@@ -137,7 +137,11 @@ const MaskOutline: React.FC<Props> = ({ image, mmPerPixel, onConfirmOutline, onC
   const [simplification, setSimplification] = useState(0);
   const [lineThicknessMM, setLineThicknessMM] = useState(1.0); // Default padding in mm
   // Convert mm to pixels and double for padding since line thickness of 5mm only pads by 2.5mm
-  const lineThickness = mmPerPixel ? (lineThicknessMM * 2) / mmPerPixel : 2;
+  // Using useCallback to ensure the function is stable and can be called from different effects
+  const getLineThickness = useCallback(() => {
+    return mmPerPixel ? (lineThicknessMM * 2) / mmPerPixel : 2;
+  }, [mmPerPixel, lineThicknessMM]);
+  
   const workerRef = useRef<Worker | null>(null);
 
   const extractPathsFromSVG = (svgString: string): Point[][] => {
@@ -202,6 +206,33 @@ const MaskOutline: React.FC<Props> = ({ image, mmPerPixel, onConfirmOutline, onC
     bwDataUrl: string;
     initialSvgString: string;
   } | null>(null);
+
+  // Function to process SVG with current thickness - can be called from multiple places
+  const processWithCurrentThickness = useCallback(async () => {
+    if (!maskDataRef.current) return;
+    
+    try {
+      setStatus('Rendering SVG to canvas with line thickness...');
+      // Always get the most current thickness value
+      const thickness = getLineThickness();
+      
+      // Render the SVG to a canvas with the current thickness
+      const canvasUrl = await renderSvgToCanvas(maskDataRef.current.initialSvgString, thickness);
+      
+      // Run Potrace on the thickened SVG
+      setStatus('Processing thickened SVG...');
+      Potrace.loadImageFromUrl(canvasUrl);
+      Potrace.process(function(){
+        const finalSvgString = Potrace.getSVG(1);
+        const paths = extractPathsFromSVG(finalSvgString);
+        setContours(paths);
+        setStatus('');
+      });
+    } catch (error) {
+      console.error('Error in SVG processing:', error);
+      setStatus('');
+    }
+  }, [getLineThickness]);
 
   // Use the pre-initialized worker from the store
   useEffect(() => {
@@ -312,24 +343,8 @@ const MaskOutline: React.FC<Props> = ({ image, mmPerPixel, onConfirmOutline, onC
             initialSvgString
           };
           
-          try {
-            setStatus('Rendering SVG to canvas with line thickness...');
-            // Render the SVG to a canvas with the specified line thickness
-            const canvasUrl = await renderSvgToCanvas(initialSvgString, lineThickness);
-            
-            // Run Potrace on the thickened SVG
-            setStatus('Processing thickened SVG...');
-            Potrace.loadImageFromUrl(canvasUrl);
-            Potrace.process(function(){
-              const finalSvgString = Potrace.getSVG(1);
-              const paths = extractPathsFromSVG(finalSvgString);
-              setContours(paths);
-              setStatus('');
-            });
-          } catch (error) {
-            console.error('Error in SVG processing:', error);
-            setStatus('');
-          }
+          // Process the SVG with the current thickness
+          await processWithCurrentThickness();
         });
       }
     };
@@ -346,7 +361,7 @@ const MaskOutline: React.FC<Props> = ({ image, mmPerPixel, onConfirmOutline, onC
         workerRef.current.onmessage = null;
       }
     };
-  }, [segmentationWorker, workerReady, initializeWorker, image.url, image.width, image.height]);
+  }, [segmentationWorker, workerReady, initializeWorker, image.url, image.width, image.height, processWithCurrentThickness]);
 
   // Send point queries when points change
   useEffect(() => {
@@ -403,32 +418,11 @@ const MaskOutline: React.FC<Props> = ({ image, mmPerPixel, onConfirmOutline, onC
     const thicknessMM = value as number;
     setLineThicknessMM(thicknessMM);
     
-    // Convert mm to pixels and double the value for padding
-    // (line thickness of 5mm only pads by 2.5mm, so we double it)
-    const thickness = mmPerPixel ? (thicknessMM * 2) / mmPerPixel : thicknessMM * 2;
-    
-    // If we have the stored mask data, use it to avoid reprocessing the mask
+    // If we have the stored mask data, process with new thickness
     if (maskDataRef.current) {
-      try {
-        setStatus('Rendering SVG to canvas with new line thickness...');
-        // Render the SVG to a canvas with the new line thickness
-        const canvasUrl = await renderSvgToCanvas(maskDataRef.current.initialSvgString, thickness);
-        
-        // Run Potrace on the thickened SVG
-        setStatus('Processing thickened SVG...');
-        Potrace.loadImageFromUrl(canvasUrl);
-        Potrace.process(function(){
-          const finalSvgString = Potrace.getSVG(1);
-          const paths = extractPathsFromSVG(finalSvgString);
-          setContours(paths);
-          setStatus('');
-        });
-      } catch (error) {
-        console.error('Error in SVG processing:', error);
-        setStatus('');
-      }
+      await processWithCurrentThickness();
     }
-  }, [mmPerPixel]);
+  }, [processWithCurrentThickness]);
 
   return (
     <>
