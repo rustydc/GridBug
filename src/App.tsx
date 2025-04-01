@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { AppBar, Toolbar, Typography, Box, Fab, Modal } from '@mui/material';
+import { AppBar, Toolbar, Typography, Box, Fab, Modal, Tooltip } from '@mui/material';
 import CropSquareRoundedIcon from '@mui/icons-material/CropSquareRounded';
 import FileUploadIcon from '@mui/icons-material/FileUpload';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
@@ -177,51 +177,59 @@ const App: React.FC = () => {
         gap: 2,
         zIndex: 1000 
       }}>
-        <Fab 
-          color="primary" 
-          aria-label="add" 
-          onClick={handleAddShape}
-        >
-          <CropSquareRoundedIcon />
-        </Fab>
-        <Fab 
-          color="primary" 
-          aria-label="upload" 
-        >
-          <input
-            type="file"
-            accept=".svg"
-            multiple
-            style={{ display: 'none' }}
-            id="svg-upload"
-            onChange={handleFileUpload}
-          />
-          <label htmlFor="svg-upload">
+        <Tooltip title="Insert rectangle">
+          <Fab 
+            color="primary" 
+            aria-label="add" 
+            onClick={handleAddShape}
+          >
+            <CropSquareRoundedIcon />
+          </Fab>
+        </Tooltip>
+        <Tooltip title="Import SVG">
+          <Fab 
+            color="primary" 
+            aria-label="upload" 
+            component="label"
+            htmlFor="svg-upload"
+          >
+            <input
+              type="file"
+              accept=".svg"
+              multiple
+              style={{ display: 'none' }}
+              id="svg-upload"
+              onChange={handleFileUpload}
+            />
             <FileUploadIcon />
-          </label>
-        </Fab>
-        <Fab 
-          color="primary" 
-          aria-label="download"
-          onClick={handleDownload}
-        >
-          <FileDownloadIcon />
-        </Fab>
-        <Fab 
-          color="primary" 
-          aria-label="upload-image"
-        >
-          <input
-            type="file"
-            accept="image/*"
-            style={{ display: 'none' }}
-            id="image-upload"
-            onChange={handleImageUpload}
-          />
-          <label htmlFor="image-upload">
+          </Fab>
+        </Tooltip>
+        <Tooltip title="Export SVG">
+          <Fab 
+            color="primary" 
+            aria-label="download"
+            onClick={handleDownload}
+          >
+            <FileDownloadIcon />
+          </Fab>
+        </Tooltip>
+        <Tooltip title="Trace image">
+          <Fab 
+            color="primary" 
+            aria-label="upload-image"
+            component="label"
+            htmlFor="image-upload"
+          >
+            <input
+              type="file"
+              accept="image/*"
+              style={{ display: 'none' }}
+              id="image-upload"
+              onChange={handleImageUpload}
+            />
             <ImageIcon />
-          </label>
-        </Fab>
+          </Fab>
+        </Tooltip>
       </Box>
 
       <Modal
