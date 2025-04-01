@@ -1,9 +1,10 @@
 import React, { useEffect } from 'react';
-import { AppBar, Toolbar, Typography, Box, Fab, Modal, Tooltip } from '@mui/material';
+import { AppBar, Toolbar, Typography, Box, Fab, Modal, Tooltip, Link } from '@mui/material';
 import CropSquareRoundedIcon from '@mui/icons-material/CropSquareRounded';
 import FileUploadIcon from '@mui/icons-material/FileUpload';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import ImageIcon from '@mui/icons-material/Image';
+import GitHubIcon from '@mui/icons-material/GitHub';
 import MainCanvas from './components/MainCanvas';
 import ImageOutliner from './components/ImageOutliner';
 import { useStore } from './store';
@@ -162,8 +163,16 @@ const App: React.FC = () => {
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
       <AppBar position="static">
-        <Toolbar>
+        <Toolbar sx={{ display: 'flex', justifyContent: 'space-between' }}>
           <Typography variant="h6">GridBug</Typography>
+          <Link 
+            href="https://github.com/rustydc/GridBug" 
+            target="_blank"
+            color="inherit"
+            sx={{ display: 'flex', alignItems: 'center' }}
+          >
+            <GitHubIcon />
+          </Link>
         </Toolbar>
       </AppBar>
       <Box sx={{ flex: 1, position: 'relative' }}>
