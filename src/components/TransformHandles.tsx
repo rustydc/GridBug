@@ -10,7 +10,7 @@ interface Props {
   bounds: Bounds;
 }
 
-const TransformHandles: React.FC<Props> = ({ bounds, onRotate, rotation }) => {
+const TransformHandles: React.FC<Props> = ({ bounds, onRotate }) => {
   const { viewState } = useStore();
   
   // Base sizes that will be adjusted for zoom

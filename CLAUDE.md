@@ -5,6 +5,7 @@
 - `npm run build` - Build for production
 - `npm run serve` - Preview production build
 - `npm run typecheck` - Run TypeScript type checking (use `tsc --noEmit`)
+- `npm run lint` - Run ESLint on TypeScript files
 
 ## Code Style Guidelines
 - **Imports**: Group imports by source (React, external libs, internal components, types, utils)

@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { Outline as OutlineType, Point } from '../types';
+import { Outline as OutlineType } from '../types';
 import { useStore } from '../store';
 import { generateSplinePath, findClosestPointOnCurve } from '../utils/spline';
 import { transformPoint, untransformPoint } from '../utils/geometry';
@@ -17,9 +17,7 @@ const Outline: React.FC<OutlineProps> = ({
   const svgRef = useRef<SVGElement | null>(null);
   const zoomFactor = viewState.zoom;
 
-  // Calculate center of bounds for rotation
-  const centerX = (bounds.minX + bounds.maxX) / 2;
-  const centerY = (bounds.minY + bounds.maxY) / 2;
+  // Center of bounds already calculated in bounds object
   
   // Transform points to canvas space using shared utility function
   const transformedPoints = points.map(point => transformPoint(point, position, rotation));
@@ -55,11 +53,6 @@ const Outline: React.FC<OutlineProps> = ({
     isDragging.current = false;
   };
 
-  const handleDragPoint = (index: number, newPos: Point) => {
-    const newPoints = [...points];
-    newPoints[index] = newPos;
-    updateOutline(id, { points: newPoints });
-  };
 
   const handleMouseDown = (e: React.MouseEvent, pointIndex?: number) => {
     e.stopPropagation();

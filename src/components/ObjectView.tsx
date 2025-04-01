@@ -58,17 +58,19 @@ const ObjectView: React.FC<Props> = ({ currentImage, onObjectConfirm, onClose })
       }
     };
 
-    const handleMouseUp = () => {
-      if (isDraggingRect && rect && rect.width > 0 && rect.height > 0) {
-        setSelectedRect(rect);
-      }
-      setIsDraggingRect(false);
-    };
 
     useEffect(() => {
       if (isDraggingRect) {
-        window.addEventListener('mouseup', handleMouseUp);
-        return () => window.removeEventListener('mouseup', handleMouseUp);
+        // Define handleMouseUp inside the effect
+        const effectHandleMouseUp = () => {
+          if (isDraggingRect && rect && rect.width > 0 && rect.height > 0) {
+            setSelectedRect(rect);
+          }
+          setIsDraggingRect(false);
+        };
+        
+        window.addEventListener('mouseup', effectHandleMouseUp);
+        return () => window.removeEventListener('mouseup', effectHandleMouseUp);
       }
     }, [isDraggingRect, rect]);
 

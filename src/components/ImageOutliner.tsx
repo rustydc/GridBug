@@ -1,7 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { Box } from '@mui/material';
 import { ImageInfo, Point } from '../types';
-import { computeTransformMatrix } from '../utils/geometry';
 import ObjectView from './ObjectView';
 import PaperFinder from './PaperFinder';
 import MaskOutline from './MaskOutline';
@@ -79,7 +78,7 @@ const ImageOutliner: React.FC<Props> = ({ image, onClose, onConfirmOutline }) =>
     };
     img.src = currentImage.url;
 
-  }, [currentImage]);
+  }, [currentImage, paperSize]);
 
   return (
     <Box sx={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', gap: 2, p: 2 }}>
@@ -88,11 +87,10 @@ const ImageOutliner: React.FC<Props> = ({ image, onClose, onConfirmOutline }) =>
           image={currentImage}
           points={points}
           onClose={onClose}
-          onConfirm={(paperSize) =>{
+          onConfirm={(paperSize) => {
             setPaperSize(paperSize);
             setMode('bounds');
-          }
-          }
+          }}
           onPointsChange={setPoints}
           onTransformed={(newImage) => {
             setCurrentImage(newImage);

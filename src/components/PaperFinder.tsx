@@ -171,7 +171,7 @@ const PaperFinder: React.FC<Props> = ({
             label="Paper Size"
             onChange={(e) => setPaperSize(e.target.value as keyof typeof PAPER_SIZES)}
           >
-            {Object.entries(PAPER_SIZES).map(([size, dims]) => (
+            {Object.entries(PAPER_SIZES).map(([size]) => (
               <MenuItem key={size} value={size}>
                 {size}
               </MenuItem>

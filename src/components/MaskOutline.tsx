@@ -37,7 +37,7 @@ const MaskOverlay: React.FC<{
     
     onAddPoint(
       { x: normalizedX, y: normalizedY },
-      !(e.button === 2 || e.shiftKey as boolean) // isPositive = true for left click without shift
+      !(e.button === 2 || e.shiftKey) // isPositive = true for left click without shift
     );
   }, [screenToImageCoords, imageWidth, imageHeight, onAddPoint]);
 
@@ -144,7 +144,7 @@ const MaskOutline: React.FC<Props> = ({ image, mmPerPixel, onConfirmOutline, onC
   
   const workerRef = useRef<Worker | null>(null);
 
-  const extractPathsFromSVG = (svgString: string): Point[][] => {
+  const extractPathsFromSVG = useCallback((svgString: string): Point[][] => {
     const paths: Point[][] = [];
     const parser = new DOMParser();
     const doc = parser.parseFromString(svgString, 'image/svg+xml');
@@ -154,9 +154,9 @@ const MaskOutline: React.FC<Props> = ({ image, mmPerPixel, onConfirmOutline, onC
       if (d) paths.push(...pathToPoints(d));
     }
     return paths;
-  };
+  }, []);
 
-  const renderSvgToCanvas = (svgString: string, lineWidth: number): Promise<string> => {
+  const renderSvgToCanvas = useCallback((svgString: string, lineWidth: number): Promise<string> => {
     return new Promise((resolve, reject) => {
       // Create a new canvas
       const canvas = document.createElement('canvas');
@@ -196,11 +196,15 @@ const MaskOutline: React.FC<Props> = ({ image, mmPerPixel, onConfirmOutline, onC
       const blob = new Blob([modifiedSvg], { type: 'image/svg+xml' });
       img.src = URL.createObjectURL(blob);
     });
-  };
+  }, [image.width, image.height]);
 
   // Store the current mask data for reuse when only lineThickness changes
   const maskDataRef = useRef<{
-    mask: any;
+    mask: {
+      data: Uint8Array;
+      width: number;
+      height: number;
+    };
     scores: number[];
     bestIndex: number;
     bwDataUrl: string;
@@ -232,7 +236,7 @@ const MaskOutline: React.FC<Props> = ({ image, mmPerPixel, onConfirmOutline, onC
       console.error('Error in SVG processing:', error);
       setStatus('');
     }
-  }, [getLineThickness]);
+  }, [getLineThickness, renderSvgToCanvas, extractPathsFromSVG, setContours, setStatus]);
 
   // Use the pre-initialized worker from the store
   useEffect(() => {
@@ -383,7 +387,7 @@ const MaskOutline: React.FC<Props> = ({ image, mmPerPixel, onConfirmOutline, onC
       type: 'decode',
       data: points
     });
-  }, [positivePoints, negativePoints, image.width, image.height, workerRef.current]);
+  }, [positivePoints, negativePoints, image.width, image.height]);
 
   const handleAddPoint = useCallback((point: Point, isPositive: boolean) => {
     if (isPositive) {

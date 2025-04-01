@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { AppBar, Toolbar, Typography, Box, Fab, Button, Modal } from '@mui/material';
+import { AppBar, Toolbar, Typography, Box, Fab, Modal } from '@mui/material';
 import CropSquareRoundedIcon from '@mui/icons-material/CropSquareRounded';
 import FileUploadIcon from '@mui/icons-material/FileUpload';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
@@ -18,8 +18,7 @@ const App: React.FC = () => {
     deleteOutline, 
     outlines, 
     centerView,
-    initializeWorker,
-    updateOutline
+    initializeWorker
   } = useStore();
   const { undo, redo } = useStore.temporal.getState();
   const [imageData, setImageData] = React.useState<ImageInfo | null>(null);
@@ -108,7 +107,7 @@ const App: React.FC = () => {
     // Start loading the worker right away when the app initializes
     console.log('Initializing segmentation worker...');
     initializeWorker()
-      .then(worker => {
+      .then(() => {
         console.log('Segmentation worker initialized and ready');
       })
       .catch(error => {
@@ -138,7 +137,7 @@ const App: React.FC = () => {
           // Create a new outline with the same points but slightly offset position
           const newOutline = {
             ...selected,
-            id: Math.random().toString(36).substr(2, 9),
+            id: Math.random().toString(36).substring(2, 11),
             position: { 
               x: selected.position.x + 10, 
               y: selected.position.y + 10 

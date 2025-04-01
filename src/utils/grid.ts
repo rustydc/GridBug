@@ -1,4 +1,4 @@
-import { Point, ViewBox, Outline } from '../types';
+import { Point, Outline } from '../types';
 import { calculateSplineBounds } from './spline';
 import { transformPoint } from './geometry';
 
@@ -47,6 +47,5 @@ export const calculateMinimalGridArea = (outlines: Outline[]): { min: Point; max
     y: Math.ceil((max.y + TOLERANCE / 2) / GRID_SIZE) * GRID_SIZE - TOLERANCE / 2
   };
 
-  console.log("minmax:", minGrid, maxGrid);
   return { min: minGrid, max: maxGrid };
 };
