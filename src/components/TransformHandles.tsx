@@ -11,15 +11,15 @@ interface Props {
 }
 
 const TransformHandles: React.FC<Props> = ({ bounds, onRotate, rotation }) => {
-  const { zoomFactor } = useStore();
+  const { viewState } = useStore();
   
   // Base sizes that will be adjusted for zoom
   const handleBaseSize = 8;
   const rotateHandleBaseOffset = 20;
   const strokeBaseWidth = 1; // Base stroke width
   
-  // Ensure zoomFactor is valid (default to 1 if it's 0 or undefined)
-  const effectiveZoomFactor = Math.max(0.1, zoomFactor || 1);
+  // Ensure zoom is valid (default to 1 if it's 0 or undefined)
+  const effectiveZoomFactor = Math.max(0.1, viewState.zoom || 1);
   
   // Adjust sizes for current zoom
   const handleSize = handleBaseSize / effectiveZoomFactor;

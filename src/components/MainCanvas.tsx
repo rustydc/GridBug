@@ -6,7 +6,20 @@ import { Point } from '../types';
 import { transformPoint } from '../utils/geometry';
 
 const MainCanvas: React.FC = () => {
-  const { viewBox, setViewBox, outlines, clearSelection, setZoomFactor, updateOutline } = useStore();
+  const { 
+    viewState, 
+    getViewBox, 
+    setViewState, 
+    zoomToPoint,
+    panView,
+    outlines, 
+    clearSelection, 
+    updateOutline 
+  } = useStore();
+  
+  // Get the calculated viewBox from the viewState
+  const viewBox = getViewBox();
+  
   const svgRef = useRef<SVGSVGElement>(null);
   const panRef = useRef<{ active: boolean; lastX: number; lastY: number }>({
     active: false,
@@ -42,25 +55,18 @@ const MainCanvas: React.FC = () => {
     const svg = svgRef.current;
     if (!svg) return;
     
+    // Convert mouse position to SVG coordinates
     const pt = svg.createSVGPoint();
     pt.x = e.clientX;
     pt.y = e.clientY;
     const svgP = pt.matrixTransform(svg.getScreenCTM()?.inverse());
 
-    const zoomFactor = 1 + e.deltaY * 0.001;
+    // Calculate new zoom factor
+    const zoomDelta = 1 + e.deltaY * 0.001;
+    const newZoom = viewState.zoom / zoomDelta;
     
-    // Get current scale from SVG matrix to update the global zoomFactor
-    const ctm = svg.getScreenCTM();
-    if (ctm) {
-      setZoomFactor(ctm.a / zoomFactor);
-    }
-    
-    setViewBox({
-      width: viewBox.width * zoomFactor,
-      height: viewBox.height * zoomFactor,
-      x: svgP.x - (svgP.x - viewBox.x) * zoomFactor,
-      y: svgP.y - (svgP.y - viewBox.y) * zoomFactor
-    });
+    // Zoom to the point under the cursor
+    zoomToPoint(newZoom, svgP);
   };
 
   const handleCanvasClick = (e: React.MouseEvent) => {
@@ -86,6 +92,7 @@ const MainCanvas: React.FC = () => {
       const svg = svgRef.current;
       if (!svg) return;
 
+      // Convert the current and previous positions to SVG coordinates
       const pt1 = svg.createSVGPoint();
       const pt2 = svg.createSVGPoint();
       
@@ -100,15 +107,18 @@ const MainCanvas: React.FC = () => {
       const svgP1 = pt1.matrixTransform(svgMatrix);
       const svgP2 = pt2.matrixTransform(svgMatrix);
 
+      // Calculate the difference directly in SVG coordinates
       const dx = svgP1.x - svgP2.x;
       const dy = svgP1.y - svgP2.y;
-
-      setViewBox({
-        ...viewBox,
-        x: viewBox.x - dx,
-        y: viewBox.y - dy
+      
+      // Update the view state with the SVG coordinate differences
+      setViewState({
+        center: {
+          x: viewState.center.x - dx,
+          y: viewState.center.y - dy
+        }
       });
-
+      
       panRef.current.lastX = e.clientX;
       panRef.current.lastY = e.clientY;
     }
@@ -277,7 +287,7 @@ const MainCanvas: React.FC = () => {
       svg.addEventListener('wheel', handleWheel);
       return () => svg.removeEventListener('wheel', handleWheel);
     }
-  }, [viewBox]);
+  }, [viewState]);
 
   useEffect(() => {
     document.addEventListener('mousemove', handleMouseMove);
@@ -290,18 +300,7 @@ const MainCanvas: React.FC = () => {
       document.removeEventListener('mouseleave', handleMouseLeave);
       document.removeEventListener('mousemove', handleDebugMouseMove);
     };
-  }, [viewBox, rotatingOutlineId, initialMouseAngle, initialRotation, initialPosition]);
-
-  // Initial zoom factor calculation on component mount
-  useEffect(() => {
-    const svg = svgRef.current;
-    if (svg) {
-      const ctm = svg.getScreenCTM();
-      if (ctm) {
-        setZoomFactor(ctm.a);
-      }
-    }
-  }, [viewBox]);
+  }, [viewState.center.x, viewState.center.y, viewState.zoom, rotatingOutlineId, initialMouseAngle, initialRotation, initialPosition]);
 
   return (
     <svg

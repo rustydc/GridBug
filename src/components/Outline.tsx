@@ -13,8 +13,9 @@ const Outline: React.FC<OutlineProps> = ({
   id, bounds, points, position, rotation, selected, editMode, color, bitmap, onRotateRequest 
 }) => {
   const dragRef = useRef<{ startX: number; startY: number; pointIndex?: number }>({ startX: 0, startY: 0 });
-  const { updateOutline, selectOutline, updateMultipleOutlines, outlines, zoomFactor } = useStore();
+  const { updateOutline, selectOutline, updateMultipleOutlines, outlines, viewState } = useStore();
   const svgRef = useRef<SVGElement | null>(null);
+  const zoomFactor = viewState.zoom;
 
   // Calculate center of bounds for rotation
   const centerX = (bounds.minX + bounds.maxX) / 2;

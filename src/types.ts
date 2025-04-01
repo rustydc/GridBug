@@ -37,6 +37,11 @@ export interface ViewBox {
   height: number;
 }
 
+export interface ViewState {
+  center: Point;
+  zoom: number;
+}
+
 export interface Bounds {
   minX: number;
   minY: number;

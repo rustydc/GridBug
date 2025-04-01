@@ -1,17 +1,33 @@
 import { create } from 'zustand';
 import { temporal } from 'zundo';
 import debounce from 'just-debounce-it';
-import { Outline, ViewBox, Point } from './types';
+import { Outline, ViewBox, Point, ViewState } from './types';
 import { calculateMinimalGridArea } from './utils/grid';
 import { getNextColor } from './utils/color';
 import { calculateSplineBounds } from './utils/spline';
 
+// Default values
+const DEFAULT_ZOOM = 1;
+const BASE_VIEW_WIDTH = 800;
+const BASE_VIEW_HEIGHT = 600;
+const PADDING = 84; // 2 grid cells of padding
+
 interface State {
   outlines: Outline[];
-  viewBox: ViewBox;
-  zoomFactor: number;  // Add zoomFactor to state
+  viewState: ViewState;
   segmentationWorker: Worker | null;
   workerReady: boolean;
+  
+  // View state management
+  setViewState: (viewState: Partial<ViewState>) => void;
+  zoomToPoint: (zoom: number, point: Point) => void;
+  centerView: () => void;
+  panView: (deltaX: number, deltaY: number) => void;
+  
+  // Calculated view box (derived from viewState)
+  getViewBox: () => ViewBox;
+  
+  // Outline management
   addOutline: (points: Point[][], bitmap?: {
     url: string;
     width: number;
@@ -19,34 +35,100 @@ interface State {
     position: Point;
   }, position?: Point) => void;
   updateOutline: (id: string, updates: Partial<Outline>) => void;
-  setViewBox: (viewBox: ViewBox) => void;
-  setZoomFactor: (factor: number) => void; // Add method to update zoomFactor
   selectOutline: (id: string | null, multiSelect?: boolean) => void;
   clearSelection: () => void;
   deleteOutline: (id: string) => void;
-  centerView: () => void;
   updateMultipleOutlines: (updates: { id: string; updates: Partial<Outline> }[]) => void;
+  
+  // Worker management
   initializeWorker: () => Promise<Worker>;
   setWorkerReady: (ready: boolean) => void;
 }
 
+// Helper function to calculate viewBox from viewState
+const calculateViewBox = (viewState: ViewState): ViewBox => {
+  const { center, zoom } = viewState;
+  const width = BASE_VIEW_WIDTH / zoom;
+  const height = BASE_VIEW_HEIGHT / zoom;
+  
+  return {
+    x: center.x - width / 2,
+    y: center.y - height / 2,
+    width,
+    height
+  };
+};
+
 export const useStore = create<State>()(
   temporal((set, get) => ({
     outlines: [],
-    viewBox: { x: 0, y: 0, width: 800, height: 600 },
-    zoomFactor: 1,  // Initialize zoomFactor
+    viewState: {
+      center: { x: 0, y: 0 },
+      zoom: DEFAULT_ZOOM
+    },
     segmentationWorker: null,
     workerReady: false,
     
+    // Helper function to get viewBox
+    getViewBox: () => calculateViewBox(get().viewState),
+    
+    setViewState: (viewState) => set((state) => ({
+      viewState: { ...state.viewState, ...viewState }
+    })),
+    
+    zoomToPoint: (zoom, point) => set((state) => {
+      // Calculate how the center should shift to keep the target point stationary
+      const currentZoom = state.viewState.zoom;
+      const zoomRatio = currentZoom / zoom;
+      
+      const currentCenter = state.viewState.center;
+      
+      // The distance from center to point will change by the inverse of the zoom ratio
+      const dx = (point.x - currentCenter.x) * (1 - zoomRatio);
+      const dy = (point.y - currentCenter.y) * (1 - zoomRatio);
+      
+      // New center is shifted by this delta
+      return {
+        viewState: {
+          center: {
+            x: currentCenter.x + dx,
+            y: currentCenter.y + dy
+          },
+          zoom
+        }
+      };
+    }),
+    
+    panView: (deltaX, deltaY) => set((state) => ({
+      viewState: {
+        ...state.viewState,
+        center: {
+          x: state.viewState.center.x - deltaX / state.viewState.zoom,
+          y: state.viewState.center.y - deltaY / state.viewState.zoom
+        }
+      }
+    })),
+    
     centerView: () => set((state) => {
       const { min, max } = calculateMinimalGridArea(state.outlines);
-      const padding = 84; // 2 grid cells padding
+      
+      // Calculate the center point of the content
+      const centerX = (min.x + max.x) / 2;
+      const centerY = (min.y + max.y) / 2;
+      
+      // Calculate required zoom to fit the content with padding
+      const contentWidth = max.x - min.x + PADDING * 2;
+      const contentHeight = max.y - min.y + PADDING * 2;
+      
+      // Calculate zoom based on both dimensions and take the smaller one to ensure everything fits
+      const zoomX = BASE_VIEW_WIDTH / contentWidth;
+      const zoomY = BASE_VIEW_HEIGHT / contentHeight;
+      const zoom = Math.min(zoomX, zoomY);
+      
       return {
-        viewBox: {
-          x: min.x - padding,
-          y: min.y - padding,
-          width: max.x - min.x + (padding * 2),
-          height: max.y - min.y + (padding * 2),
+        viewState: {
+          center: { x: centerX, y: centerY },
+          zoom: zoom
         }
       };
     }),
@@ -86,10 +168,6 @@ export const useStore = create<State>()(
         return update ? { ...outline, ...update.updates } : outline;
       })
     })),
-
-    setViewBox: (viewBox) => set({ viewBox }),
-
-    setZoomFactor: (factor) => set({ zoomFactor: factor }), // Method to update zoomFactor
 
     selectOutline: (id, multiSelect = false) => set((state) => ({
       outlines: state.outlines.map(outline => ({
@@ -148,7 +226,8 @@ export const useStore = create<State>()(
   }), {
     limit: 50,
     partialize: (state) => ({
-      outlines: state.outlines
+      outlines: state.outlines,
+      viewState: state.viewState
     }),
     handleSet: (handleSet) => {
       const debouncedSet = debounce(handleSet, 3000, true);
