@@ -1,4 +1,4 @@
-import { Point, Outline } from '../types';
+import { Point, Outline, SplineOutline, RoundedRectOutline } from '../types';
 import { calculateSplineBounds } from './spline';
 import { transformPoint } from './geometry';
 
@@ -17,15 +17,59 @@ export const calculateMinimalGridArea = (outlines: Outline[]): { min: Point; max
     return { min: { x: 0, y: 0 }, max: { x: GRID_SIZE, y: GRID_SIZE } };
   }
 
-  // For each outline, transform the points to canvas space and calculate bounds
+  // For each outline, get the bounds in canvas space
   const transformedBounds = outlines.map(outline => {
-    const { points, position, rotation } = outline;
+    const { position, rotation } = outline;
     
-    // Transform the points to canvas space
-    const transformedPoints = points.map(point => transformPoint(point, position, rotation));
-    
-    // Calculate bounds directly from the transformed points
-    return calculateSplineBounds(transformedPoints);
+    if (outline.type === 'spline') {
+      const splineOutline = outline as SplineOutline;
+      // Transform the points to canvas space
+      const transformedPoints = splineOutline.points.map(point => 
+        transformPoint(point, position, rotation)
+      );
+      
+      // Calculate bounds directly from the transformed points
+      return calculateSplineBounds(transformedPoints);
+    } else {
+      // For rounded rectangles, calculate bounds considering corner radius
+      const roundedRect = outline as RoundedRectOutline;
+      const { width, height, radius } = roundedRect;
+      
+      // Calculate the center points of the four corner arcs (in local coordinates)
+      const halfWidth = width / 2;
+      const halfHeight = height / 2;
+      
+      // Corner arc centers are inset from the rectangle corners by the radius
+      const cornerCenters = [
+        // Top-left corner arc center
+        { x: -halfWidth + radius, y: -halfHeight + radius },
+        // Top-right corner arc center
+        { x: halfWidth - radius, y: -halfHeight + radius },
+        // Bottom-right corner arc center
+        { x: halfWidth - radius, y: halfHeight - radius },
+        // Bottom-left corner arc center
+        { x: -halfWidth + radius, y: halfHeight - radius }
+      ];
+      
+      // Transform the corner centers to canvas space
+      const transformedCenters = cornerCenters.map(center => 
+        transformPoint(center, position, rotation)
+      );
+      
+      // Find the min/max x and y values of the transformed centers
+      const centerMinX = Math.min(...transformedCenters.map(p => p.x));
+      const centerMinY = Math.min(...transformedCenters.map(p => p.y));
+      const centerMaxX = Math.max(...transformedCenters.map(p => p.x));
+      const centerMaxY = Math.max(...transformedCenters.map(p => p.y));
+      
+      // Simply add/subtract the radius to get the actual bounds
+      return {
+        minX: centerMinX - radius,
+        minY: centerMinY - radius,
+        maxX: centerMaxX + radius,
+        maxY: centerMaxY + radius
+      };
+    }
   });
   
   const min = {

@@ -1,4 +1,4 @@
-import { Outline, Point } from '../types';
+import { Outline, Point, SplineOutline, RoundedRectOutline } from '../types';
 import { calculateMinimalGridArea } from './grid';
 import { generateSplinePath } from './spline';
 
@@ -20,15 +20,40 @@ export const generateSVG = (outlines: Outline[]): string => {
   const width = max.x - min.x;
   const height = max.y - min.y;
   
-  const paths = outlines.map(outline => {
-    const points = outline.points.map(p => transformPoint(p, outline, min));
-    const pathData = generateSplinePath(points);
-    return `<path d="${pathData}" fill="${outline.color}" fill-opacity="0.2" stroke="${outline.color}"/>`;
+  const svgElements = outlines.map(outline => {
+    if (outline.type === 'spline') {
+      const splineOutline = outline as SplineOutline;
+      const points = splineOutline.points.map(p => transformPoint(p, outline, min));
+      const pathData = generateSplinePath(points);
+      return `<path d="${pathData}" fill="${outline.color}" fill-opacity="0.2" stroke="${outline.color}"/>`;
+    } else if (outline.type === 'roundedRect') {
+      const rectOutline = outline as RoundedRectOutline;
+      // We need to calculate the position of the rectangle in the exported SVG
+      const center = transformPoint({x: 0, y: 0}, outline, min);
+      // Half dimensions for positioning
+      const halfWidth = rectOutline.width / 2;
+      const halfHeight = rectOutline.height / 2;
+      
+      // Calculate transformed corner positions for more accurate placement
+      return `<rect
+        x="${center.x - halfWidth}"
+        y="${center.y - halfHeight}"
+        width="${rectOutline.width}"
+        height="${rectOutline.height}"
+        rx="${rectOutline.radius}"
+        ry="${rectOutline.radius}"
+        transform="rotate(${outline.rotation}, ${center.x}, ${center.y})"
+        fill="${outline.color}"
+        fill-opacity="0.2"
+        stroke="${outline.color}"
+      />`;
+    }
+    return '';
   });
 
   // No need to multiply, values are already in mm
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}mm" height="${height}mm">
-  ${paths.join('\n  ')}
+  ${svgElements.join('\n  ')}
 </svg>`;
 };

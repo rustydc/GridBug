@@ -3,9 +3,10 @@ export interface Point {
   y: number;
 }
 
-export interface Outline {
+// Base interface with common properties
+export interface BaseOutline {
   id: string;
-  points: Point[];
+  type: 'spline' | 'roundedRect';
   position: Point;
   rotation: number;
   selected: boolean;
@@ -19,6 +20,23 @@ export interface Outline {
     position: Point;  // Relative to outline origin
   };
 }
+
+// Spline-specific outline (points-based)
+export interface SplineOutline extends BaseOutline {
+  type: 'spline';
+  points: Point[];
+}
+
+// Rounded rectangle outline
+export interface RoundedRectOutline extends BaseOutline {
+  type: 'roundedRect';
+  width: number;
+  height: number;
+  radius: number;
+}
+
+// Union type for all outline types
+export type Outline = SplineOutline | RoundedRectOutline;
 
 export interface Matrix {
   a: number;

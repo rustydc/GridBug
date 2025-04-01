@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { AppBar, Toolbar, Typography, Box, Fab, Modal, Tooltip, Link } from '@mui/material';
 import CropSquareRoundedIcon from '@mui/icons-material/CropSquareRounded';
+import GestureIcon from '@mui/icons-material/Gesture';
 import FileUploadIcon from '@mui/icons-material/FileUpload';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import ImageIcon from '@mui/icons-material/Image';
@@ -16,6 +17,7 @@ import { getNextColor } from './utils/color';
 const App: React.FC = () => {
   const { 
     addOutline, 
+    addRoundedRect,
     deleteOutline, 
     outlines, 
     centerView,
@@ -89,6 +91,11 @@ const App: React.FC = () => {
       { x: -21, y: 21 }
     ]]);
   };
+  
+  const handleAddRoundedRect = () => {
+    // Create a default rounded rectangle
+    addRoundedRect(80, 60, 15);
+  };
 
   const handleDownload = () => {
     const svgContent = generateSVG(outlines);
@@ -135,30 +142,44 @@ const App: React.FC = () => {
         // Duplicate the selected outline with a new color
         const selected = outlines.find(o => o.selected);
         if (selected) {
-          // Create a new outline with the same points but slightly offset position
-          const newOutline = {
-            ...selected,
-            id: Math.random().toString(36).substring(2, 11),
-            position: { 
-              x: selected.position.x + 10, 
-              y: selected.position.y + 10 
-            },
-            selected: false,
-            color: getNextColor(outlines.length) // Generate a new color
-          };
-          
-          addOutline(
-            [[...newOutline.points]], // Wrap points in array for multi-contour format
-            newOutline.bitmap,
-            newOutline.position
-          );
+          if (selected.type === 'spline') {
+            // Create a new outline with the same points but slightly offset position
+            const newOutline = {
+              ...selected,
+              id: Math.random().toString(36).substring(2, 11),
+              position: { 
+                x: selected.position.x + 10, 
+                y: selected.position.y + 10 
+              },
+              selected: false,
+              color: getNextColor(outlines.length) // Generate a new color
+            };
+            
+            addOutline(
+              [[...newOutline.points]], // Wrap points in array for multi-contour format
+              newOutline.bitmap,
+              newOutline.position
+            );
+          } else if (selected.type === 'roundedRect') {
+            // For rounded rectangles, create a new one with the same properties
+            const rectOutline = selected;
+            addRoundedRect(
+              rectOutline.width,
+              rectOutline.height,
+              rectOutline.radius,
+              { 
+                x: rectOutline.position.x + 10, 
+                y: rectOutline.position.y + 10 
+              }
+            );
+          }
         }
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [outlines, undo, redo, deleteOutline, centerView, addOutline]);
+  }, [outlines, undo, redo, deleteOutline, centerView, addOutline, addRoundedRect]);
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
@@ -186,11 +207,20 @@ const App: React.FC = () => {
         gap: 2,
         zIndex: 1000 
       }}>
-        <Tooltip title="Insert rectangle">
+        <Tooltip title="Insert spline">
           <Fab 
             color="primary" 
             aria-label="add" 
             onClick={handleAddShape}
+          >
+            <GestureIcon />
+          </Fab>
+        </Tooltip>
+        <Tooltip title="Insert rounded rectangle">
+          <Fab 
+            color="primary" 
+            aria-label="add-rounded" 
+            onClick={handleAddRoundedRect}
           >
             <CropSquareRoundedIcon />
           </Fab>

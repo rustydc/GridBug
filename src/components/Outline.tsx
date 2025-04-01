@@ -1,11 +1,25 @@
 import React, { useRef } from 'react';
-import { Outline as OutlineType } from '../types';
+import { Point, Bounds } from '../types';
 import { useStore } from '../store';
 import { generateSplinePath, findClosestPointOnCurve } from '../utils/spline';
 import { transformPoint, untransformPoint } from '../utils/geometry';
 import TransformHandles from './TransformHandles';
 
-interface OutlineProps extends OutlineType {
+interface OutlineProps {
+  id: string;
+  bounds: Bounds;
+  points: Point[];
+  position: Point;
+  rotation: number;
+  selected: boolean;
+  editMode: boolean;
+  color: string;
+  bitmap?: {
+    url: string;
+    width: number;
+    height: number;
+    position: Point;
+  };
   onRotateRequest?: (outlineId: string) => void;
 }
 
@@ -250,6 +264,7 @@ const Outline: React.FC<OutlineProps> = ({
             rotation={rotation}
             onRotate={handleRotateRequest}
             bounds={bounds}
+            outlineId={id}
           />
         )}
       </g>

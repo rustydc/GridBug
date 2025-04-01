@@ -2,6 +2,7 @@ import React, { useRef, useEffect, useState } from 'react';
 import { useStore } from '../store';
 import Grid from './Grid';
 import Outline from './Outline';
+import RoundedRectOutline from './RoundedRectOutline';
 import { Point } from '../types';
 import { transformPoint } from '../utils/geometry';
 
@@ -333,13 +334,25 @@ const MainCanvas: React.FC = () => {
       onContextMenu={(e) => e.preventDefault()}
     >
       <Grid />
-      {outlines.map(outline => (
-        <Outline 
-          key={outline.id} 
-          {...outline} 
-          onRotateRequest={handleRotateRequest}
-        />
-      ))}
+      {outlines.map(outline => {
+        if (outline.type === 'roundedRect') {
+          return (
+            <RoundedRectOutline
+              key={outline.id} 
+              {...outline} 
+              onRotateRequest={handleRotateRequest}
+            />
+          );
+        } else {
+          return (
+            <Outline 
+              key={outline.id} 
+              {...outline} 
+              onRotateRequest={handleRotateRequest}
+            />
+          );
+        }
+      })}
     </svg>
   )
 };
