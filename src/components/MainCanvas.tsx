@@ -64,7 +64,7 @@ const MainCanvas: React.FC = () => {
   };
 
   const handleCanvasClick = (e: React.MouseEvent) => {
-    if (e.target === svgRef.current && !e.shiftKey) {
+    if (!e.shiftKey) {
       clearSelection();
     }
   };
