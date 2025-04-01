@@ -10,6 +10,7 @@ import { useStore } from './store';
 import { Point, ImageInfo } from './types';
 import { parseSVGPath } from './utils/svgParser';
 import { generateSVG } from './utils/svgExport';
+import { getNextColor } from './utils/color';
 
 const App: React.FC = () => {
   const { 
@@ -17,7 +18,8 @@ const App: React.FC = () => {
     deleteOutline, 
     outlines, 
     centerView,
-    initializeWorker 
+    initializeWorker,
+    updateOutline
   } = useStore();
   const { undo, redo } = useStore.temporal.getState();
   const [imageData, setImageData] = React.useState<ImageInfo | null>(null);
@@ -129,12 +131,34 @@ const App: React.FC = () => {
         } else {
           undo();
         }
+      } else if (e.key === 'd' && e.ctrlKey) {
+        // Duplicate the selected outline with a new color
+        const selected = outlines.find(o => o.selected);
+        if (selected) {
+          // Create a new outline with the same points but slightly offset position
+          const newOutline = {
+            ...selected,
+            id: Math.random().toString(36).substr(2, 9),
+            position: { 
+              x: selected.position.x + 10, 
+              y: selected.position.y + 10 
+            },
+            selected: false,
+            color: getNextColor(outlines.length) // Generate a new color
+          };
+          
+          addOutline(
+            [[...newOutline.points]], // Wrap points in array for multi-contour format
+            newOutline.bitmap,
+            newOutline.position
+          );
+        }
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [outlines, undo, redo, deleteOutline, centerView]);
+  }, [outlines, undo, redo, deleteOutline, centerView, addOutline]);
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>

@@ -17,7 +17,7 @@ interface State {
     width: number;
     height: number;
     position: Point;
-  }) => void;
+  }, position?: Point) => void;
   updateOutline: (id: string, updates: Partial<Outline>) => void;
   setViewBox: (viewBox: ViewBox) => void;
   setZoomFactor: (factor: number) => void; // Add method to update zoomFactor
@@ -51,12 +51,12 @@ export const useStore = create<State>()(
       };
     }),
 
-    addOutline: (points, bitmap) => set((state) => {
+    addOutline: (points, bitmap, position = {x: 0, y: 0}) => set((state) => {
       const newState = {
         outlines: [...state.outlines, {
           id: Math.random().toString(36).substr(2, 9),
           points: points[0], // Take first contour for now
-          position: { x: 0, y: 0 },
+          position: position,
           rotation: 0,
           selected: false,
           editMode: false,
