@@ -1,18 +1,21 @@
-import React, { useEffect } from 'react';
-import { AppBar, Toolbar, Typography, Box, Fab, Modal, Tooltip, Link } from '@mui/material';
+import React, { useEffect, useState } from 'react';
+import { AppBar, Toolbar, Typography, Box, Fab, Modal, Tooltip, Link, Tab, Tabs } from '@mui/material';
 import CropSquareRoundedIcon from '@mui/icons-material/CropSquareRounded';
 import GestureIcon from '@mui/icons-material/Gesture';
 import FileUploadIcon from '@mui/icons-material/FileUpload';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import ImageIcon from '@mui/icons-material/Image';
 import GitHubIcon from '@mui/icons-material/GitHub';
+import ThreeDRotationIcon from '@mui/icons-material/ThreeDRotation';
 import MainCanvas from './components/MainCanvas';
 import ImageOutliner from './components/ImageOutliner';
+import ReplicadViewer from './components/ReplicadViewer';
 import { useStore } from './store';
 import { Point, ImageInfo } from './types';
 import { parseSVGPath } from './utils/svgParser';
 import { generateSVG } from './utils/svgExport';
 import { getNextColor } from './utils/color';
+import { initializeReplicad } from './utils/replicadUtils';
 
 const App: React.FC = () => {
   const { 
@@ -24,7 +27,8 @@ const App: React.FC = () => {
     initializeWorker
   } = useStore();
   const { undo, redo } = useStore.temporal.getState();
-  const [imageData, setImageData] = React.useState<ImageInfo | null>(null);
+  const [imageData, setImageData] = useState<ImageInfo | null>(null);
+  const [viewMode, setViewMode] = useState<'2d' | '3d'>('2d');
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -110,7 +114,7 @@ const App: React.FC = () => {
     URL.revokeObjectURL(url);
   };
 
-  // Initialize the segmentation worker when the app loads
+  // Initialize the segmentation worker and replicad when the app loads
   useEffect(() => {
     // Start loading the worker right away when the app initializes
     console.log('Initializing segmentation worker...');
@@ -120,6 +124,15 @@ const App: React.FC = () => {
       })
       .catch(error => {
         console.error('Failed to initialize segmentation worker:', error);
+      });
+    
+    // Initialize replicad for 3D functionality
+    initializeReplicad()
+      .then(() => {
+        console.log('Replicad initialized and ready');
+      })
+      .catch(error => {
+        console.error('Failed to initialize replicad:', error);
       });
   }, [initializeWorker]);
 
@@ -185,7 +198,17 @@ const App: React.FC = () => {
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
       <AppBar position="static">
         <Toolbar sx={{ display: 'flex', justifyContent: 'space-between' }}>
-          <Typography variant="h6">GridBug</Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <Typography variant="h6" sx={{ mr: 3 }}>GridBug</Typography>
+            <Tabs 
+              value={viewMode} 
+              onChange={(_, newValue) => setViewMode(newValue)}
+              textColor="inherit"
+            >
+              <Tab value="2d" label="2D Editor" />
+              <Tab value="3d" label="3D Preview" />
+            </Tabs>
+          </Box>
           <Link 
             href="https://github.com/rustydc/GridBug" 
             target="_blank"
@@ -197,7 +220,11 @@ const App: React.FC = () => {
         </Toolbar>
       </AppBar>
       <Box sx={{ flex: 1, position: 'relative' }}>
-        <MainCanvas />
+        {viewMode === '2d' ? (
+          <MainCanvas />
+        ) : (
+          <ReplicadViewer width={window.innerWidth} height={window.innerHeight - 64} />
+        )}
       </Box>
       <Box sx={{ 
         position: 'fixed', 
@@ -207,68 +234,82 @@ const App: React.FC = () => {
         gap: 2,
         zIndex: 1000 
       }}>
-        <Tooltip title="Insert spline">
-          <Fab 
-            color="primary" 
-            aria-label="add" 
-            onClick={handleAddShape}
-          >
-            <GestureIcon />
-          </Fab>
-        </Tooltip>
-        <Tooltip title="Insert rounded rectangle">
-          <Fab 
-            color="primary" 
-            aria-label="add-rounded" 
-            onClick={handleAddRoundedRect}
-          >
-            <CropSquareRoundedIcon />
-          </Fab>
-        </Tooltip>
-        <Tooltip title="Import SVG">
-          <Fab 
-            color="primary" 
-            aria-label="upload" 
-            component="label"
-            htmlFor="svg-upload"
-          >
-            <input
-              type="file"
-              accept=".svg"
-              multiple
-              style={{ display: 'none' }}
-              id="svg-upload"
-              onChange={handleFileUpload}
-            />
-            <FileUploadIcon />
-          </Fab>
-        </Tooltip>
-        <Tooltip title="Export SVG">
-          <Fab 
-            color="primary" 
-            aria-label="download"
-            onClick={handleDownload}
-          >
-            <FileDownloadIcon />
-          </Fab>
-        </Tooltip>
-        <Tooltip title="Trace image">
-          <Fab 
-            color="primary" 
-            aria-label="upload-image"
-            component="label"
-            htmlFor="image-upload"
-          >
-            <input
-              type="file"
-              accept="image/*"
-              style={{ display: 'none' }}
-              id="image-upload"
-              onChange={handleImageUpload}
-            />
-            <ImageIcon />
-          </Fab>
-        </Tooltip>
+        {viewMode === '2d' ? (
+          <>
+            <Tooltip title="Insert spline">
+              <Fab 
+                color="primary" 
+                aria-label="add" 
+                onClick={handleAddShape}
+              >
+                <GestureIcon />
+              </Fab>
+            </Tooltip>
+            <Tooltip title="Insert rounded rectangle">
+              <Fab 
+                color="primary" 
+                aria-label="add-rounded" 
+                onClick={handleAddRoundedRect}
+              >
+                <CropSquareRoundedIcon />
+              </Fab>
+            </Tooltip>
+            <Tooltip title="Import SVG">
+              <Fab 
+                color="primary" 
+                aria-label="upload" 
+                component="label"
+                htmlFor="svg-upload"
+              >
+                <input
+                  type="file"
+                  accept=".svg"
+                  multiple
+                  style={{ display: 'none' }}
+                  id="svg-upload"
+                  onChange={handleFileUpload}
+                />
+                <FileUploadIcon />
+              </Fab>
+            </Tooltip>
+            <Tooltip title="Export SVG">
+              <Fab 
+                color="primary" 
+                aria-label="download"
+                onClick={handleDownload}
+              >
+                <FileDownloadIcon />
+              </Fab>
+            </Tooltip>
+            <Tooltip title="Trace image">
+              <Fab 
+                color="primary" 
+                aria-label="upload-image"
+                component="label"
+                htmlFor="image-upload"
+              >
+                <input
+                  type="file"
+                  accept="image/*"
+                  style={{ display: 'none' }}
+                  id="image-upload"
+                  onChange={handleImageUpload}
+                />
+                <ImageIcon />
+              </Fab>
+            </Tooltip>
+          </>
+        ) : (
+          <Tooltip title="Switch to 2D Editor">
+            <Fab 
+              color="primary" 
+              aria-label="switch-to-2d"
+              onClick={() => setViewMode('2d')}
+            >
+              <ThreeDRotationIcon />
+            </Fab>
+          </Tooltip>
+        )}
       </Box>
 
       <Modal

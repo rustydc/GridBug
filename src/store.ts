@@ -57,6 +57,9 @@ interface State {
   // Worker management
   initializeWorker: () => Promise<Worker>;
   setWorkerReady: (ready: boolean) => void;
+  
+  // Computed properties for component usage
+  get objects(): Outline[];
 }
 
 // Helper function to calculate viewBox from viewState
@@ -85,6 +88,11 @@ export const useStore = create<State>()(
     
     // Helper function to get viewBox
     getViewBox: () => calculateViewBox(get().viewState),
+    
+    // Computed property for accessing outlines as objects
+    get objects() {
+      return get().outlines;
+    },
     
     setViewState: (viewState) => set((state) => ({
       viewState: { ...state.viewState, ...viewState }
