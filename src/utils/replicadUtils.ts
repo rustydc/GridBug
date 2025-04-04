@@ -97,6 +97,9 @@ export const convertShapesToModel = async (
       const baseRect = replicad.drawRoundedRectangle(width, height, cornerRadius);
       console.log('Created base rectangle:', baseRect);
       
+      // Store the original rectangle (before cutouts) for creating the bottom
+      const originalRect = baseRect;
+      
       // Now process each outline as a cutout
       let currentShape = baseRect;
       
@@ -190,44 +193,32 @@ export const convertShapesToModel = async (
       const sketch = currentShape.sketchOnPlane();
       console.log('Created sketch on plane from final shape');
       
-      // Extrude the sketch to create a 3D model
-      const extruded = sketch.extrude(binHeight);
-      console.log('Successfully extruded to 3D:', extruded);
+      // Extrude the sketch to create a 3D model (the walls)
+      const extrudedWalls = sketch.extrude(binHeight);
+      console.log('Successfully extruded walls to 3D:', extrudedWalls);
       
-      return extruded;
+      // Create the bottom (1mm thick)
+      const bottomSketch = originalRect.sketchOnPlane();
+      const bottomHeight = 1; // 1mm thick bottom
+      const extrudedBottom = bottomSketch.extrude(bottomHeight);
+      console.log('Successfully created bottom (1mm thick)');
+      
+      // Position the bottom at the base of the bin
+      const bottom = extrudedBottom.translate(0, 0, -bottomHeight);
+      
+      // Union the walls with the bottom to create the complete bin
+      // Use a type assertion to tell TypeScript this is a Solid object
+      const finalModel = (extrudedWalls as any).fuse(bottom);
+      console.log('Successfully fused walls with bottom');
+      
+      return finalModel;
     } catch (error) {
       console.error('Error creating model with cutouts:', error);
-      
-      // Fallback to simple rounded rectangle without cutout
-      const rect = replicad.drawRoundedRectangle(100, 100, 10);
-      const sketch = rect.sketchOnPlane();
-      const extruded = sketch.extrude(binHeight);
-      console.log('Created fallback 3D model (simple box)');
-      
-      return extruded;
+      throw error;
     }
   } catch (error) {
     console.error('Error converting shapes to 3D model:', error);
-    // Return fallback model with the simplest possible approach
-    console.error('Trying absolute fallback model...');
-    try {
-      // Last ditch effort - try simplified approach
-      const rect = replicad.drawRectangle(100, 100);
-      
-      if (rect && typeof rect.sketchOnPlane === 'function') {
-        const sketch = rect.sketchOnPlane();
-        const extruded = sketch.extrude(binHeight);
-        console.log('Created fallback 3D model:', extruded);
-        return extruded;
-      }
-      
-      // If that fails too, throw the original error
-      console.error('All fallback approaches failed');
-      throw error;
-    } catch (fallbackError) {
-      console.error('Fallback also failed:', fallbackError);
-      throw error; // Re-throw the original error
-    }
+    throw error;
   }
 };
 
