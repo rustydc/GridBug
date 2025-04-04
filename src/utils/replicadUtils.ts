@@ -107,8 +107,9 @@ export const convertShapesToModel = async (
           if (obj.type === 'roundedRect') {
             // Create a rounded rectangle at the correct position
             // Need to adjust position relative to the grid min
+            // NOTE: We negate the X coordinate to correct the left/right flipping in 3D view
             const rectObj = obj as any;
-            const rectX = rectObj.position.x - min.x - width/2;
+            const rectX = -1 * (rectObj.position.x - min.x - width/2);
             const rectY = rectObj.position.y - min.y - height/2;
             
             cutoutShape = replicad.drawRoundedRectangle(
@@ -125,7 +126,8 @@ export const convertShapesToModel = async (
             const splinePoints = splineObj.points;
             
             // Adjust position relative to the grid min
-            const splineX = splineObj.position.x - min.x - width/2;
+            // NOTE: We negate the X coordinate to correct the left/right flipping in 3D view
+            const splineX = -1 * (splineObj.position.x - min.x - width/2);
             const splineY = splineObj.position.y - min.y - height/2;
             
             console.log(`Creating spline with ${splinePoints.length} points at (${splineX}, ${splineY})`);
@@ -139,11 +141,11 @@ export const convertShapesToModel = async (
               splinePoints[1]
             ];
             
-            // Start with the first point
+            // Start with the first point - mirror the X coordinate
             const startPoint = splinePoints[0];
             
-            // Create a sketch starting with the first point
-            let sketcher = replicad.draw([startPoint.x, startPoint.y]);
+            // Create a sketch starting with the first point (with mirrored X)
+            let sketcher = replicad.draw([-startPoint.x, startPoint.y]);
             
             // Add cubic bezier curves for each segment
             for (let i = 1; i < allPoints.length - 2; i++) {
@@ -155,12 +157,12 @@ export const convertShapesToModel = async (
               // Get control points for this segment using the same function as in the UI
               const [cp1, cp2] = catmullToBezier(p0, p1, p2, p3);
               
-              // Add cubic bezier curve to the sketch
+              // Add cubic bezier curve to the sketch - mirror the X coordinates
               // Format: cubicBezierCurveTo(end, startControlPoint, endControlPoint)
               sketcher = sketcher.cubicBezierCurveTo(
-                [p2.x, p2.y],        // end point
-                [cp1.x, cp1.y],      // first control point
-                [cp2.x, cp2.y]       // second control point
+                [-p2.x, p2.y],        // end point with mirrored X
+                [-cp1.x, cp1.y],      // first control point with mirrored X
+                [-cp2.x, cp2.y]       // second control point with mirrored X
               );
             }
             
