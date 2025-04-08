@@ -6,7 +6,7 @@ import opencascade from 'replicad-opencascadejs/src/replicad_single.js';
 // Import the WASM file directly
 import opencascadeWasm from 'replicad-opencascadejs/src/replicad_single.wasm?url';
 import { catmullToBezier } from '../utils/spline';
-import { calculateMinimalGridArea, GRID_SIZE } from '../utils/grid';
+import { calculateMinimalGridArea } from '../utils/grid';
 
 // Initialization flag to ensure we only run setup once
 let isReplicadInitialized = false;
@@ -53,191 +53,128 @@ export const initializeReplicad = async (): Promise<void> => {
  */
 export const convertShapesToModel = async (
   outlines: ObjectData[],
-  binHeight: number,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  _wallThickness: number // Prefixed with _ to indicate it's not used yet
+  totalHeight: number,
+  wallThickness: number,
+  baseHeight: number = 4.75 // Default base height is 4.75mm
 ) => {
   // Make sure replicad is initialized first
   await initializeReplicad();
   
   // Log outlines for debugging - only do this once
-  console.log(`Converting ${outlines.length} outlines to 3D model with height ${binHeight}mm`);
+  console.log('Creating model from outlines:', outlines.length);
   
-  // Always attempt to use outlines whether they're empty or not,
-  // as we want to convert the actual shapes when possible
-  try {
-    // This is a simplified implementation - will need to be expanded
-    // to handle all the different shape types in your application
+  // Calculate the minimal grid area to get the base rectangle size
+  const { min, max } = calculateMinimalGridArea(outlines);
+  console.log('Grid area:', { min, max });
+  
+  // Create rounded rectangle base at the center of the grid
+  const width = max.x - min.x;
+  const height = max.y - min.y;
+  
+  // Constants for the bin
+  const BIN_CORNER_RADIUS = 7.5; // Base corner radius in mm
+  const wallHeight = totalHeight - baseHeight; // Calculate the wall height
+  
+  // Draw the standard 41.5mm base with 7.5mm corner radius
+  const baseRect = replicad.drawRoundedRectangle(max.x - min.x, max.y - min.y, BIN_CORNER_RADIUS);
+  
+  // Now process each outline as a cutout for the walls
+  let wallsShape = baseRect; // The wall shape that will get cutouts
+  
+  for (const obj of outlines) {
+    let cutoutShape;
     
-    // For demonstration, we'll create a simple sketch from the first object
-    // In a real implementation, you would need to:
-    // 1. Extract paths from your objects
-    // 2. Convert them to replicad sketch paths
-    // 3. Combine them appropriately
-    // 4. Extrude and perform boolean operations
-
-    console.log('Creating model from outlines:', outlines.length);
-    
-    try {
-      // Calculate the minimal grid area to get the base rectangle size
-      const { min, max } = calculateMinimalGridArea(outlines);
-      console.log('Grid area:', { min, max });
+    if (obj.type === 'roundedRect') {
+      // Create a rounded rectangle at the correct position
+      // Need to adjust position relative to the grid min
+      // NOTE: We negate the X coordinate to correct the left/right flipping in 3D view
+      const rectX = -1 * (obj.position.x - min.x - width/2);
+      const rectY = obj.position.y - min.y - height/2;
       
-      // Calculate width and height in grid units
-      const gridWidth = Math.max(1, (max.x - min.x) / GRID_SIZE);
-      const gridHeight = Math.max(1, (max.y - min.y) / GRID_SIZE);
-      console.log(`Grid size: ${gridWidth}x${gridHeight} units (${gridWidth * GRID_SIZE}x${gridHeight * GRID_SIZE}mm)`);
+      cutoutShape = replicad.drawRoundedRectangle(
+        obj.width, 
+        obj.height,
+        obj.radius
+      ).translate(rectX, rectY);
+    } 
+    else if (obj.type === 'spline') {
+      // Create a proper spline path using bezier curves
+      const splinePoints = obj.points;
       
-      // Create rounded rectangle base at the center of the grid
-      const width = gridWidth * GRID_SIZE;
-      const height = gridHeight * GRID_SIZE;
-      const cornerRadius = 10; // Fixed corner radius
+      // Adjust position relative to the grid min
+      // NOTE: We negate the X coordinate to correct the left/right flipping in 3D view
+      const splineX = -1 * (obj.position.x - min.x - width/2);
+      const splineY = obj.position.y - min.y - height/2;
+            
+      // Create a closed loop by creating an array of:
+      // [last point, all points, first point, second point]
+      const allPoints = [
+        splinePoints[splinePoints.length - 1],
+        ...splinePoints,
+        splinePoints[0],
+        splinePoints[1]
+      ];
       
-      // Draw the base rectangle
-      const baseRect = replicad.drawRoundedRectangle(width, height, cornerRadius);
-      console.log('Created base rectangle:', baseRect);
+      // Start with the first point - mirror the X coordinate
+      const startPoint = splinePoints[0];
       
-      // Store the original rectangle (before cutouts) for creating the bottom
-      const originalRect = baseRect;
+      // Create a sketch starting with the first point (with mirrored X)
+      let sketcher = replicad.draw([-startPoint.x, startPoint.y]);
       
-      // Now process each outline as a cutout
-      let currentShape = baseRect;
-      
-      for (const obj of outlines) {
-        try {
-          let cutoutShape;
-          
-          if (obj.type === 'roundedRect') {
-            // Create a rounded rectangle at the correct position
-            // Need to adjust position relative to the grid min
-            // NOTE: We negate the X coordinate to correct the left/right flipping in 3D view
-            const rectObj = obj as any;
-            const rectX = -1 * (rectObj.position.x - min.x - width/2);
-            const rectY = rectObj.position.y - min.y - height/2;
-            
-            cutoutShape = replicad.drawRoundedRectangle(
-              rectObj.width, 
-              rectObj.height,
-              rectObj.radius
-            ).translate(rectX, rectY);
-            
-            console.log(`Created rounded rect cutout at (${rectX}, ${rectY})`);
-          } 
-          else if (obj.type === 'spline') {
-            // Create a proper spline path using bezier curves
-            const splineObj = obj as any;
-            const splinePoints = splineObj.points;
-            
-            // Adjust position relative to the grid min
-            // NOTE: We negate the X coordinate to correct the left/right flipping in 3D view
-            const splineX = -1 * (splineObj.position.x - min.x - width/2);
-            const splineY = splineObj.position.y - min.y - height/2;
-            
-            console.log(`Creating spline with ${splinePoints.length} points at (${splineX}, ${splineY})`);
-            
-            // Create a closed loop by creating an array of:
-            // [last point, all points, first point, second point]
-            const allPoints = [
-              splinePoints[splinePoints.length - 1],
-              ...splinePoints,
-              splinePoints[0],
-              splinePoints[1]
-            ];
-            
-            // Start with the first point - mirror the X coordinate
-            const startPoint = splinePoints[0];
-            
-            // Create a sketch starting with the first point (with mirrored X)
-            let sketcher = replicad.draw([-startPoint.x, startPoint.y]);
-            
-            // Add cubic bezier curves for each segment
-            for (let i = 1; i < allPoints.length - 2; i++) {
-              const p0 = allPoints[i - 1];
-              const p1 = allPoints[i];
-              const p2 = allPoints[i + 1];
-              const p3 = allPoints[i + 2];
-              
-              // Get control points for this segment using the same function as in the UI
-              const [cp1, cp2] = catmullToBezier(p0, p1, p2, p3);
-              
-              // Add cubic bezier curve to the sketch - mirror the X coordinates
-              // Format: cubicBezierCurveTo(end, startControlPoint, endControlPoint)
-              sketcher = sketcher.cubicBezierCurveTo(
-                [-p2.x, p2.y],        // end point with mirrored X
-                [-cp1.x, cp1.y],      // first control point with mirrored X
-                [-cp2.x, cp2.y]       // second control point with mirrored X
-              );
-            }
-            
-            // Close the shape
-            const sketch = sketcher.close();
-            
-            // Translate the sketch to the correct position
-            cutoutShape = sketch.translate(splineX, splineY);
-            
-            console.log(`Created spline cutout at (${splineX}, ${splineY})`);
-          }
-          
-          // Cut the shape from the base if we created one
-          if (cutoutShape && typeof currentShape.cut === 'function') {
-            currentShape = currentShape.cut(cutoutShape);
-            console.log('Cut shape from base rectangle');
-          }
-        } catch (shapeError) {
-          console.error('Error processing a shape cutout:', shapeError);
-          // Continue with the next shape
-        }
+      // Add cubic bezier curves for each segment
+      for (let i = 1; i < allPoints.length - 2; i++) {
+        const p0 = allPoints[i - 1];
+        const p1 = allPoints[i];
+        const p2 = allPoints[i + 1];
+        const p3 = allPoints[i + 2];
+        
+        // Get control points for this segment using the same function as in the UI
+        const [cp1, cp2] = catmullToBezier(p0, p1, p2, p3);
+        
+        // Add cubic bezier curve to the sketch - mirror the X coordinates
+        // Format: cubicBezierCurveTo(end, startControlPoint, endControlPoint)
+        sketcher = sketcher.cubicBezierCurveTo(
+          [-p2.x, p2.y],        // end point with mirrored X
+          [-cp1.x, cp1.y],      // first control point with mirrored X
+          [-cp2.x, cp2.y]       // second control point with mirrored X
+        );
       }
       
-      // Convert to 3D by first creating a sketch on a plane
-      const sketch = currentShape.sketchOnPlane();
-      console.log('Created sketch on plane from final shape');
+      // Close the shape
+      const sketch = sketcher.close();
       
-      // Extrude the sketch to create a 3D model (the walls)
-      const extrudedWalls = sketch.extrude(binHeight);
-      console.log('Successfully extruded walls to 3D:', extrudedWalls);
-      
-      // Create the bottom (1mm thick)
-      const bottomSketch = originalRect.sketchOnPlane();
-      const bottomHeight = 1; // 1mm thick bottom
-      const extrudedBottom = bottomSketch.extrude(bottomHeight);
-      console.log('Successfully created bottom (1mm thick)');
-      
-      // Position the bottom at the base of the bin
-      const bottom = extrudedBottom.translate(0, 0, -bottomHeight);
-      
-      // Union the walls with the bottom to create the complete bin
-      // Use a type assertion to tell TypeScript this is a Solid object
-      const finalModel = (extrudedWalls as any).fuse(bottom);
-      console.log('Successfully fused walls with bottom');
-      
-      return finalModel;
-    } catch (error) {
-      console.error('Error creating model with cutouts:', error);
-      throw error;
+      // Translate the sketch to the correct position
+      cutoutShape = sketch.translate(splineX, splineY);
     }
-  } catch (error) {
-    console.error('Error converting shapes to 3D model:', error);
-    throw error;
-  }
-};
+    
+    if (!cutoutShape) {
+      throw new Error('Cutout shape is undefined');
+    }
 
-/**
- * In a real implementation, this function would:
- * 1. Parse SVG paths from your objects
- * 2. Convert them to replicad sketches
- * 3. Apply appropriate transformations
- */
-export const svgPathToReplicadSketch = async (
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  _svgPath: string
-) => {
-  // Import replicad dynamically to avoid TypeScript errors with its types
-  const replicad = await import('replicad');
+    wallsShape = wallsShape.cut(cutoutShape);
+  }
   
-  // This is a placeholder - real implementation would parse SVG path
-  // and convert to replicad operations
+  // Create base
+  console.log('Creating base shape...');
+  let finalModel; 
   
-  // For now, return a simple rectangle
-  return replicad.drawRectangle(100, 100);
+  // Create the base 
+  const baseSketch = baseRect.sketchOnPlane();
+  const baseModel = baseSketch.extrude(baseHeight) as replicad.Solid;
+  console.log(`Created base with height ${baseHeight}mm`);
+  
+  // Create walls (with cutouts if any)
+  console.log('Creating wall shape with cutouts...');
+  let wallsModel;
+  
+  const wallsSketch = wallsShape.sketchOnPlane();
+  // Position walls on top of the base
+  wallsModel = wallsSketch.extrude(wallHeight).translate(0, 0, baseHeight) as replicad.Solid;
+  console.log(`Created walls with height ${wallHeight}mm`);
+  
+  // Combine the base and walls into a single model
+  finalModel = baseModel.fuse(wallsModel);
+  console.log('Successfully created final 3D model by combining base and walls');
+
+  return finalModel;
 };
