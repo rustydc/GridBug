@@ -6,7 +6,8 @@ import { pathToPoints } from '../utils/svgPathParser';
 import ZoomableSvgView, { useZoomContext } from './ZoomableSvgView';
 import { generateSplinePath } from '../utils/spline';
 import { simplifyPoints } from '../utils/geometry';
-import { useStore } from '../store';
+import type { DataPoint } from '../utils/samWorkerApi';
+import { useSamWorker } from '../utils/samWorkerSingleton';
 
 // This component will be used inside ZoomableSvgView
 const MaskOverlay: React.FC<{
@@ -18,7 +19,9 @@ const MaskOverlay: React.FC<{
   imageWidth: number;
   imageHeight: number;
   simplification: number;
-}> = ({ maskUrl, contours, positivePoints, negativePoints, onAddPoint, imageWidth, imageHeight, simplification }) => {
+  isProcessing: boolean; // Add flag to indicate processing state
+  isImageProcessed: boolean; // Flag to indicate image has finished initial processing
+}> = ({ maskUrl, contours, positivePoints, negativePoints, onAddPoint, imageWidth, imageHeight, simplification, isProcessing, isImageProcessed }) => {
   const { zoom, screenToImageCoords } = useZoomContext();
 
   // Calculate a stroke width that maintains visual consistency at all zoom levels
@@ -26,6 +29,9 @@ const MaskOverlay: React.FC<{
 
   const handleClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation(); // Don't trigger pan
+    
+    // Prevent adding points if we're processing or the image is not fully processed
+    if (isProcessing || !isImageProcessed) return;
     
     if (e.button !== 0 && (e.button !== 2 && !e.shiftKey)) return;
     
@@ -39,7 +45,7 @@ const MaskOverlay: React.FC<{
       { x: normalizedX, y: normalizedY },
       !(e.button === 2 || e.shiftKey) // isPositive = true for left click without shift
     );
-  }, [screenToImageCoords, imageWidth, imageHeight, onAddPoint]);
+  }, [screenToImageCoords, imageWidth, imageHeight, onAddPoint, isProcessing, isImageProcessed]);
 
   return (
     <>
@@ -109,7 +115,10 @@ const MaskOverlay: React.FC<{
           e.preventDefault();
           handleClick(e);
         }}
-        style={{ cursor: 'crosshair' }}
+        style={{ 
+          cursor: isProcessing || !isImageProcessed ? 'wait' : 'crosshair',
+          pointerEvents: isProcessing || !isImageProcessed ? 'none' : 'auto'
+        }}
       />
     </>
   );
@@ -128,7 +137,9 @@ interface Props {
 }
 
 const MaskOutline: React.FC<Props> = ({ image, mmPerPixel, onConfirmOutline, onClose }) => {
-  const { segmentationWorker, workerReady, initializeWorker } = useStore();
+  // Get the SAM worker using react-use-comlink
+  const { proxy: samWorker } = useSamWorker();
+  
   const [positivePoints, setPositivePoints] = useState<Point[]>([]);
   const [negativePoints, setNegativePoints] = useState<Point[]>([]);
   const [status, setStatus] = useState<string>('');
@@ -136,13 +147,14 @@ const MaskOutline: React.FC<Props> = ({ image, mmPerPixel, onConfirmOutline, onC
   const [contours, setContours] = useState<Point[][]>([]);  // Changed from svgPaths
   const [simplification, setSimplification] = useState(0);
   const [lineThicknessMM, setLineThicknessMM] = useState(1.0); // Default padding in mm
+  const [imageProcessed, setImageProcessed] = useState(false);
+  const [isProcessingStarted, setIsProcessingStarted] = useState(false);
+  
   // Convert mm to pixels and double for padding since line thickness of 5mm only pads by 2.5mm
   // Using useCallback to ensure the function is stable and can be called from different effects
   const getLineThickness = useCallback(() => {
     return mmPerPixel ? (lineThicknessMM * 2) / mmPerPixel : 2;
   }, [mmPerPixel, lineThicknessMM]);
-  
-  const workerRef = useRef<Worker | null>(null);
 
   const extractPathsFromSVG = useCallback((svgString: string): Point[][] => {
     const paths: Point[][] = [];
@@ -238,49 +250,64 @@ const MaskOutline: React.FC<Props> = ({ image, mmPerPixel, onConfirmOutline, onC
     }
   }, [getLineThickness, renderSvgToCanvas, extractPathsFromSVG, setContours, setStatus]);
 
-  // Use the pre-initialized worker from the store
+  // Process the image when worker is ready
   useEffect(() => {
-    if (segmentationWorker && workerReady) {
-      // Worker is already initialized and ready to use
-      workerRef.current = segmentationWorker;
-      setStatus('Preparing image...');
-      segmentationWorker.postMessage({
-        type: 'segment',
-        data: image.url
-      });
-    } else {
-      // Initialize worker if it doesn't exist yet
-      setStatus('Loading model...');
-      initializeWorker().then(worker => {
-        workerRef.current = worker;
+    const processImage = async () => {
+      if (!samWorker) {
+        setStatus('Loading model...');
+        return;
+      }
+
+      // Prevent duplicate processing in strict mode
+      if (isProcessingStarted) return;
+      setIsProcessingStarted(true);
+
+      try {
+        // Process the image
         setStatus('Preparing image...');
-        worker.postMessage({
-          type: 'segment',
-          data: image.url
-        });
-      }).catch(error => {
-        console.error('Failed to initialize worker:', error);
-        setStatus(`Error: ${error.message}`);
-      });
-    }
+        await samWorker.processImage(image.url);
+        setImageProcessed(true);
+        setStatus('');
+      } catch (error) {
+        console.error('Failed to process image:', error);
+        setStatus(`Error: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    };
     
-    // Set up message handler
-    const handleMessage = async (e: MessageEvent) => {
-      if (e.data.type === 'error') {
-        console.error('Worker error:', e.data.error);
-        setStatus(`Error: ${e.data.error}`);
+    if (samWorker) {
+      processImage();
+    }
+  }, [samWorker, image.url, isProcessingStarted]);
+
+  // Process mask when points change or when image processing completes
+  useEffect(() => {
+    const generateMask = async () => {
+      // Reset the stored mask data when points change
+      maskDataRef.current = null;
+      
+      // If no points, clear the mask
+      if (positivePoints.length === 0 && negativePoints.length === 0) {
+        setMaskUrl(null);
         return;
       }
       
-      if (e.data.type === 'segment_result') {
-        if (e.data.data === 'done') {
-          setStatus('');
-        }
-      } else if (e.data.type === 'decode_result') {
-        console.log(e.data.data);
-        const { mask, scores } = e.data.data;
+      // Ensure we have a worker and the image has been processed
+      if (!samWorker || !imageProcessed) return;
+      
+      try {
+        setStatus('Generating mask...');
         
-        // Select best mask from the three predictions
+        // Convert points to the format expected by the worker
+        const points: DataPoint[] = [
+          ...positivePoints.map(p => ({ point: [p.x, p.y] as [number, number], label: 1 })),
+          ...negativePoints.map(p => ({ point: [p.x, p.y] as [number, number], label: 0 }))
+        ];
+        
+        // Generate the mask
+        const result = await samWorker.generateMask(points);
+        const { mask, scores } = result;
+        
+        // Select best mask from the predictions
         const numMasks = scores.length;
         let bestIndex = 0;
         for (let i = 1; i < numMasks; i++) {
@@ -289,21 +316,21 @@ const MaskOutline: React.FC<Props> = ({ image, mmPerPixel, onConfirmOutline, onC
           }
         }
         
-        // Create canvas and fill with mask data
+        // Create canvas and fill with mask data for display
         const canvas = document.createElement('canvas');
         canvas.width = image.width;
         canvas.height = image.height;
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
-
-        // Create ImageData from mask, handling the fact that masks are interleaved
+        
+        // Create ImageData from mask
         const imgData = ctx.createImageData(image.width, image.height);
         for (let i = 0; i < image.width * image.height; i++) {
           const maskValue = mask.data[numMasks * i + bestIndex];
           const idx = i * 4;
-          imgData.data[idx] = 0;     // R
-          imgData.data[idx+1] = 114;  // G
-          imgData.data[idx+2] = 189;  // B
+          imgData.data[idx] = 0;       // R
+          imgData.data[idx+1] = 114;   // G
+          imgData.data[idx+2] = 189;   // B
           imgData.data[idx+3] = maskValue ? 128 : 0;  // A (semi-transparent)
         }
         ctx.putImageData(imgData, 0, 0);
@@ -331,11 +358,11 @@ const MaskOutline: React.FC<Props> = ({ image, mmPerPixel, onConfirmOutline, onC
         bwCtx.putImageData(bwImgData, 0, 0);
         const bwDataUrl = bwCanvas.toDataURL();
         
-        // Process with the first Potrace
+        // Process with Potrace
         setStatus('Generating initial SVG outline...');
         Potrace.loadImageFromUrl(bwDataUrl);
         Potrace.process(async function(){
-          // Get the first SVG from potrace
+          // Get the SVG from potrace
           const initialSvgString = Potrace.getSVG(1);
           
           // Store mask data for reuse when lineThickness changes
@@ -350,44 +377,14 @@ const MaskOutline: React.FC<Props> = ({ image, mmPerPixel, onConfirmOutline, onC
           // Process the SVG with the current thickness
           await processWithCurrentThickness();
         });
+      } catch (error) {
+        console.error('Error generating mask:', error);
+        setStatus(`Error: ${error instanceof Error ? error.message : String(error)}`);
       }
     };
-
-    // Register message handler for the worker
-    if (workerRef.current) {
-      workerRef.current.onmessage = handleMessage;
-    }
-
-    // Don't terminate the worker on unmount, as we're reusing it
-    return () => {
-      // Remove message handler but keep the worker alive
-      if (workerRef.current) {
-        workerRef.current.onmessage = null;
-      }
-    };
-  }, [segmentationWorker, workerReady, initializeWorker, image.url, image.width, image.height, processWithCurrentThickness]);
-
-  // Send point queries when points change
-  useEffect(() => {
-    // Reset the stored mask data
-    maskDataRef.current = null;
     
-    if (positivePoints.length === 0 && negativePoints.length === 0) {
-      setMaskUrl(null);
-      return;
-    }
-
-    setStatus('Generating mask...');
-    const points = [
-      ...positivePoints.map(p => ({ point: [p.x, p.y], label: 1 })),
-      ...negativePoints.map(p => ({ point: [p.x, p.y], label: 0 }))
-    ];
-
-    workerRef.current?.postMessage({
-      type: 'decode',
-      data: points
-    });
-  }, [positivePoints, negativePoints, image.width, image.height]);
+    generateMask();
+  }, [samWorker, imageProcessed, positivePoints, negativePoints, image.width, image.height, processWithCurrentThickness]);
 
   const handleAddPoint = useCallback((point: Point, isPositive: boolean) => {
     if (isPositive) {
@@ -428,6 +425,9 @@ const MaskOutline: React.FC<Props> = ({ image, mmPerPixel, onConfirmOutline, onC
     }
   }, [processWithCurrentThickness]);
 
+  // Determine if we're in any processing state
+  const isProcessing = Boolean(status);
+
   return (
     <>
       <Box sx={{ position: 'relative', width: '100%', height: '100%' }}>
@@ -441,6 +441,8 @@ const MaskOutline: React.FC<Props> = ({ image, mmPerPixel, onConfirmOutline, onC
             imageWidth={image.width}
             imageHeight={image.height}
             simplification={simplification}
+            isProcessing={isProcessing}
+            isImageProcessed={imageProcessed}
           />
         </ZoomableSvgView>
         {status && (
@@ -493,11 +495,16 @@ const MaskOutline: React.FC<Props> = ({ image, mmPerPixel, onConfirmOutline, onC
           />
         </Box>
         <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end' }}>
-          <Button onClick={handleClear}>Clear Points</Button>
+          <Button 
+            onClick={handleClear}
+            disabled={isProcessing}
+          >
+            Clear Points
+          </Button>
           <Button 
             variant="contained" 
             onClick={handleConfirm}
-            disabled={contours.length === 0}
+            disabled={contours.length === 0 || isProcessing}
           >
             Confirm outline
           </Button>

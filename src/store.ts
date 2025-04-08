@@ -28,8 +28,6 @@ const calculateRectBounds = (width: number, height: number): Bounds => {
 interface State {
   outlines: Outline[];
   viewState: ViewState;
-  segmentationWorker: Worker | null;
-  workerReady: boolean;
   
   // View state management
   setViewState: (viewState: Partial<ViewState>) => void;
@@ -53,10 +51,6 @@ interface State {
   clearSelection: () => void;
   deleteOutline: (id: string) => void;
   updateMultipleOutlines: (updates: { id: string; updates: Partial<Outline> }[]) => void;
-  
-  // Worker management
-  initializeWorker: () => Promise<Worker>;
-  setWorkerReady: (ready: boolean) => void;
   
   // Computed properties for component usage
   get objects(): Outline[];
@@ -83,8 +77,6 @@ export const useStore = create<State>()(
       center: { x: 0, y: 0 },
       zoom: DEFAULT_ZOOM
     },
-    segmentationWorker: null,
-    workerReady: false,
     
     // Helper function to get viewBox
     getViewBox: () => calculateViewBox(get().viewState),
@@ -281,40 +273,7 @@ export const useStore = create<State>()(
     
     deleteOutline: (id) => set((state) => ({
       outlines: state.outlines.filter(outline => outline.id !== id)
-    })),
-    
-    initializeWorker: async () => {
-      const state = get();
-      
-      // Return existing worker if already initialized and ready
-      if (state.segmentationWorker && state.workerReady) {
-        return state.segmentationWorker;
-      }
-      
-      // Return existing worker if it's still initializing
-      if (state.segmentationWorker) {
-        console.log('Worker already initializing');
-        return state.segmentationWorker;
-      }
-      
-      // Create and store the worker first to prevent double initialization
-      const worker = new Worker(new URL('./utils/worker.ts', import.meta.url), { type: 'module' });
-      set({ segmentationWorker: worker });
-      
-      // Set up message handler
-      worker.onmessage = (e) => {
-        if (e.data.type === 'ready') {
-          console.log('Worker initialized and ready');
-          set({ workerReady: true });
-        } else if (e.data.type === 'error') {
-          console.error('Worker initialization error:', e.data.error);
-        }
-      };
-      
-      return worker;
-    },
-    
-    setWorkerReady: (ready) => set({ workerReady: ready })
+    }))
   }), {
     limit: 50,
     partialize: (state) => ({

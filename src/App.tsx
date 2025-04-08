@@ -16,6 +16,7 @@ import { parseSVGPath } from './utils/svgParser';
 import { generateSVG } from './utils/svgExport';
 import { getNextColor } from './utils/color';
 import { initializeReplicad } from './utils/replicadUtils';
+import { useSamWorker } from './utils/samWorkerSingleton';
 
 const App: React.FC = () => {
   const { 
@@ -23,8 +24,7 @@ const App: React.FC = () => {
     addRoundedRect,
     deleteOutline, 
     outlines, 
-    centerView,
-    initializeWorker
+    centerView
   } = useStore();
   const { undo, redo } = useStore.temporal.getState();
   const [imageData, setImageData] = useState<ImageInfo | null>(null);
@@ -114,17 +114,22 @@ const App: React.FC = () => {
     URL.revokeObjectURL(url);
   };
 
-  // Initialize the segmentation worker and replicad when the app loads
+  // Get SAM worker proxy using react-use-comlink singleton
+  const { proxy: samWorker } = useSamWorker();
+
+  // Initialize the worker and replicad when the app loads
   useEffect(() => {
-    // Start loading the worker right away when the app initializes
-    console.log('Initializing segmentation worker...');
-    initializeWorker()
-      .then(() => {
-        console.log('Segmentation worker initialized and ready');
-      })
-      .catch(error => {
-        console.error('Failed to initialize segmentation worker:', error);
-      });
+    // Initialize the SAM worker
+    if (samWorker) {
+      console.log('Initializing SAM worker...');
+      samWorker.initialize()
+        .then(() => {
+          console.log('SAM worker initialized and ready');
+        })
+        .catch(error => {
+          console.error('Failed to initialize SAM worker:', error);
+        });
+    }
     
     // Initialize replicad for 3D functionality
     initializeReplicad()
@@ -134,7 +139,7 @@ const App: React.FC = () => {
       .catch(error => {
         console.error('Failed to initialize replicad:', error);
       });
-  }, [initializeWorker]);
+  }, [samWorker]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
