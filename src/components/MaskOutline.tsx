@@ -7,7 +7,7 @@ import ZoomableSvgView, { useZoomContext } from './ZoomableSvgView';
 import { generateSplinePath } from '../utils/spline';
 import { simplifyPoints } from '../utils/geometry';
 import type { DataPoint } from '../utils/samWorkerApi';
-import { useSamWorker } from '../utils/samWorkerSingleton';
+import { useProcessImage, useGenerateMask, useSamReady } from '../utils/samQueries';
 
 // This component will be used inside ZoomableSvgView
 const MaskOverlay: React.FC<{
@@ -137,8 +137,10 @@ interface Props {
 }
 
 const MaskOutline: React.FC<Props> = ({ image, mmPerPixel, onConfirmOutline, onClose }) => {
-  // Get the SAM worker using react-use-comlink
-  const { proxy: samWorker } = useSamWorker();
+  // Use TanStack Query hooks for SAM worker interactions
+  const { data: isReady } = useSamReady();
+  const { isLoading: isImageProcessing, isSuccess: isImageProcessed } = useProcessImage(image.url);
+  const { mutateAsync: generateMask, isPending: isMaskGenerating } = useGenerateMask();
   
   const [positivePoints, setPositivePoints] = useState<Point[]>([]);
   const [negativePoints, setNegativePoints] = useState<Point[]>([]);
@@ -147,8 +149,6 @@ const MaskOutline: React.FC<Props> = ({ image, mmPerPixel, onConfirmOutline, onC
   const [contours, setContours] = useState<Point[][]>([]);  // Changed from svgPaths
   const [simplification, setSimplification] = useState(0);
   const [lineThicknessMM, setLineThicknessMM] = useState(1.0); // Default padding in mm
-  const [imageProcessed, setImageProcessed] = useState(false);
-  const [isProcessingStarted, setIsProcessingStarted] = useState(false);
   
   // Convert mm to pixels and double for padding since line thickness of 5mm only pads by 2.5mm
   // Using useCallback to ensure the function is stable and can be called from different effects
@@ -250,38 +250,20 @@ const MaskOutline: React.FC<Props> = ({ image, mmPerPixel, onConfirmOutline, onC
     }
   }, [getLineThickness, renderSvgToCanvas, extractPathsFromSVG, setContours, setStatus]);
 
-  // Process the image when worker is ready
+  // Update status based on image processing
   useEffect(() => {
-    const processImage = async () => {
-      if (!samWorker) {
-        setStatus('Loading model...');
-        return;
-      }
-
-      // Prevent duplicate processing in strict mode
-      if (isProcessingStarted) return;
-      setIsProcessingStarted(true);
-
-      try {
-        // Process the image
-        setStatus('Preparing image...');
-        await samWorker.processImage(image.url);
-        setImageProcessed(true);
-        setStatus('');
-      } catch (error) {
-        console.error('Failed to process image:', error);
-        setStatus(`Error: ${error instanceof Error ? error.message : String(error)}`);
-      }
-    };
-    
-    if (samWorker) {
-      processImage();
+    if (!isReady) {
+      setStatus('Loading model...');
+    } else if (isImageProcessing) {
+      setStatus('Preparing image...');
+    } else if (isImageProcessed) {
+      setStatus('');
     }
-  }, [samWorker, image.url, isProcessingStarted]);
+  }, [isReady, isImageProcessing, isImageProcessed]);
 
   // Process mask when points change or when image processing completes
   useEffect(() => {
-    const generateMask = async () => {
+    const processMask = async () => {
       // Reset the stored mask data when points change
       maskDataRef.current = null;
       
@@ -291,8 +273,8 @@ const MaskOutline: React.FC<Props> = ({ image, mmPerPixel, onConfirmOutline, onC
         return;
       }
       
-      // Ensure we have a worker and the image has been processed
-      if (!samWorker || !imageProcessed) return;
+      // Ensure the image has been processed
+      if (!isImageProcessed) return;
       
       try {
         setStatus('Generating mask...');
@@ -303,8 +285,8 @@ const MaskOutline: React.FC<Props> = ({ image, mmPerPixel, onConfirmOutline, onC
           ...negativePoints.map(p => ({ point: [p.x, p.y] as [number, number], label: 0 }))
         ];
         
-        // Generate the mask
-        const result = await samWorker.generateMask(points);
+        // Generate the mask using TanStack Query mutation
+        const result = await generateMask(points);
         const { mask, scores } = result;
         
         // Select best mask from the predictions
@@ -383,8 +365,8 @@ const MaskOutline: React.FC<Props> = ({ image, mmPerPixel, onConfirmOutline, onC
       }
     };
     
-    generateMask();
-  }, [samWorker, imageProcessed, positivePoints, negativePoints, image.width, image.height, processWithCurrentThickness]);
+    processMask();
+  }, [isImageProcessed, positivePoints, negativePoints, image.width, image.height, processWithCurrentThickness, generateMask]);
 
   const handleAddPoint = useCallback((point: Point, isPositive: boolean) => {
     if (isPositive) {
@@ -426,7 +408,7 @@ const MaskOutline: React.FC<Props> = ({ image, mmPerPixel, onConfirmOutline, onC
   }, [processWithCurrentThickness]);
 
   // Determine if we're in any processing state
-  const isProcessing = Boolean(status);
+  const isProcessing = Boolean(status) || isImageProcessing || isMaskGenerating;
 
   return (
     <>
@@ -442,7 +424,7 @@ const MaskOutline: React.FC<Props> = ({ image, mmPerPixel, onConfirmOutline, onC
             imageHeight={image.height}
             simplification={simplification}
             isProcessing={isProcessing}
-            isImageProcessed={imageProcessed}
+            isImageProcessed={isImageProcessed}
           />
         </ZoomableSvgView>
         {status && (

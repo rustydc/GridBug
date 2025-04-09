@@ -16,7 +16,7 @@ import { parseSVGPath } from './utils/svgParser';
 import { generateSVG } from './utils/svgExport';
 import { getNextColor } from './utils/color';
 import { initializeReplicad } from './utils/replicadUtils';
-import { useSamWorker } from './utils/samWorkerSingleton';
+import { useInitializeSam } from './utils/samQueries';
 
 const App: React.FC = () => {
   const { 
@@ -114,23 +114,10 @@ const App: React.FC = () => {
     URL.revokeObjectURL(url);
   };
 
-  // Get SAM worker proxy using react-use-comlink singleton
-  const { proxy: samWorker } = useSamWorker();
+  useInitializeSam();
 
-  // Initialize the worker and replicad when the app loads
+  // Initialize replicad when the app loads
   useEffect(() => {
-    // Initialize the SAM worker
-    if (samWorker) {
-      console.log('Initializing SAM worker...');
-      samWorker.initialize()
-        .then(() => {
-          console.log('SAM worker initialized and ready');
-        })
-        .catch(error => {
-          console.error('Failed to initialize SAM worker:', error);
-        });
-    }
-    
     // Initialize replicad for 3D functionality
     initializeReplicad()
       .then(() => {
@@ -139,7 +126,7 @@ const App: React.FC = () => {
       .catch(error => {
         console.error('Failed to initialize replicad:', error);
       });
-  }, [samWorker]);
+  }, []);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
