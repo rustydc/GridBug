@@ -6,7 +6,7 @@ import opencascade from 'replicad-opencascadejs/src/replicad_single.js';
 // Import the WASM file directly
 import opencascadeWasm from 'replicad-opencascadejs/src/replicad_single.wasm?url';
 import { catmullToBezier } from '../utils/spline';
-import { calculateMinimalGridArea } from '../utils/grid';
+import { calculateMinimalGridArea, GRID_SIZE, TOLERANCE } from '../utils/grid';
 
 // Initialization flag to ensure we only run setup once
 let isReplicadInitialized = false;
@@ -154,14 +154,52 @@ export const convertShapesToModel = async (
     wallsShape = wallsShape.cut(cutoutShape);
   }
   
-  // Create base
-  console.log('Creating base shape...');
-  let finalModel; 
+  // Create a lofted base with beveled edges
+  console.log('Creating lofted base shape...');
+  let finalModel;
   
-  // Create the base 
-  const baseSketch = baseRect.sketchOnPlane();
-  const baseModel = baseSketch.extrude(baseHeight) as replicad.Solid;
-  console.log(`Created base with height ${baseHeight}mm`);
+  // Top size - use GRID_SIZE - TOLERANCE for the outer dimension
+  const outerDim = GRID_SIZE - TOLERANCE; // 41.5mm
+  const middleDim = outerDim - 2.15; // 39.35mm - after 45-degree slope
+  const bottomDim = middleDim - 0.8; // 38.55mm - after second 45-degree slope
+  
+  // Create profiles for lofting
+  // Top profile at full size
+  const topProfile = replicad.drawRoundedRectangle(width, height, BIN_CORNER_RADIUS);
+  
+  // Middle profile (after first 45-degree bevel) - slightly smaller
+  const middleScale = middleDim / outerDim;
+  const middleProfile = replicad.drawRoundedRectangle(
+    width * middleScale, 
+    height * middleScale, 
+    BIN_CORNER_RADIUS * middleScale
+  );
+  
+  // Bottom profile - smallest
+  const bottomScale = bottomDim / outerDim;
+  const bottomProfile = replicad.drawRoundedRectangle(
+    width * bottomScale, 
+    height * bottomScale, 
+    BIN_CORNER_RADIUS * bottomScale
+  );
+  
+  // Heights for the profiles
+  const topHeight = baseHeight; // Top of the base
+  const middleHeight = topHeight - 2.15; // After first 45-degree slope
+  const flatHeight = middleHeight - 1.8; // After vertical section
+  const bottomHeight = 0; // Bottom of the base
+  
+  // Create sketches at different heights using the proper replicad API
+  // Using the Drawing objects directly for sketch placement
+  const topSketch = topProfile.sketchOnPlane("XY", topHeight) as replicad.SketchInterface;
+  const middleSketch = middleProfile.sketchOnPlane("XY", middleHeight) as replicad.SketchInterface;
+  const flatSketch = middleProfile.sketchOnPlane("XY", flatHeight) as replicad.SketchInterface;
+  const bottomSketch = bottomProfile.sketchOnPlane("XY", bottomHeight) as replicad.SketchInterface;
+  
+  // Create the base by lofting through the profiles
+  // Extracting wires for lofting
+  const baseModel = topSketch.loftWith([middleSketch, flatSketch, bottomSketch ], {ruled: true}) as replicad.Solid;
+  console.log('Created lofted base with beveled profile');
   
   // Create walls (with cutouts if any)
   console.log('Creating wall shape with cutouts...');
