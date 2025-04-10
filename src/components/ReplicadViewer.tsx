@@ -1,10 +1,9 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Box, Button, Slider, Stack, Typography } from '@mui/material';
 import { useStore } from '../store';
-import { convertShapesToModel } from '../utils/replicadUtils';
 import ThreeContext from './ThreeContext';
 import ReplicadMesh from './ReplicadMesh';
+import { useGenerateModel, useStepExport, ReplicadFaces, ReplicadEdges } from '../workers/replicad/replicadQueries';
 
 interface ReplicadViewerProps {
   width: number;
@@ -17,76 +16,44 @@ const ReplicadViewer: React.FC<ReplicadViewerProps> = ({ width, height }) => {
   
   const [binHeight, setBinHeight] = useState<number>(20);
   const [wallThickness, setWallThickness] = useState<number>(1.2);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [model, setModel] = useState<any>(null);
-  const [meshData, setMeshData] = useState<{ faces: any; edges: any } | null>(null);
+  const [isExportingStep, setIsExportingStep] = useState(false);
 
-  // Generate 3D model and mesh when outlines or dimensions change
-  useEffect(() => {
-    const generateModel = async () => {
-      setIsLoading(true);
-      
-      try {
-        // Convert outlines to 3D model
-        const newModel = await convertShapesToModel(outlines, binHeight, wallThickness);
-        setModel(newModel);
-        
-        console.log('Model created, checking for mesh methods:', {
-          hasMesh: typeof newModel.mesh === 'function',
-          hasMeshEdges: typeof newModel.meshEdges === 'function'
-        });
-        
-        // Generate mesh data for 3D rendering
-        if (typeof newModel.mesh === 'function' && typeof newModel.meshEdges === 'function') {
-          const faces = newModel.mesh({ tolerance: 0.05, angularTolerance: 30 });
-          // Remove the keepMesh property as it's not in the type definition
-          const edges = newModel.meshEdges();
-          
-          console.log('Generated mesh data:', { 
-            hasFaces: !!faces, 
-            hasEdges: !!edges 
-          });
-          
-          setMeshData({ faces, edges });
-        } else {
-          console.warn('Model does not have mesh methods');
-          setMeshData(null);
-        }
-        
-        setIsLoading(false);
-      } catch (error) {
-        console.error('Error generating 3D model:', error);
-        setIsLoading(false);
-        setMeshData(null);
-      }
-    };
-    
-    generateModel();
-  }, [outlines, binHeight, wallThickness]);
+  // Use TanStack Query with proper caching
+  const { 
+    data: meshData, 
+    isLoading: isModelGenerating,
+    error: modelError
+  } = useGenerateModel(outlines, binHeight, wallThickness);
+  
+  // Use the query for STEP export, but only enable it when needed
+  const {
+    data: stepBlob,
+    isLoading: isStepLoading,
+    error: stepError,
+    refetch: refetchStep
+  } = useStepExport(outlines, binHeight, wallThickness, 4.75, isExportingStep);
 
-  // Export STEP file
-  const exportSTEP = async () => {
+  // Log errors
+  if (modelError) {
+    console.error('Error generating 3D model:', modelError);
+  }
+  
+  if (stepError) {
+    console.error('Error generating STEP file:', stepError);
+  }
+
+  // Handle STEP file export via the query
+  const handleExportSTEP = async () => {
+    setIsExportingStep(true);
     try {
-      if (!model) {
-        // Generate a model if it doesn't exist
-        const newModel = await convertShapesToModel(outlines, binHeight, wallThickness);
-        setModel(newModel);
-        
-        if (typeof newModel.blobSTEP === 'function') {
-          const step = await newModel.blobSTEP();
-          downloadFile(step, 'gridbug-bin.step');
-        } else {
-          console.error('Model does not have blobSTEP method');
-        }
-      } else if (typeof model.blobSTEP === 'function') {
-        // Use blobSTEP to get a blob directly for download
-        const step = await model.blobSTEP();
-        downloadFile(step, 'gridbug-bin.step');
-      } else {
-        console.error('Model does not have blobSTEP method');
+      const result = await refetchStep();
+      if (result.data) {
+        downloadFile(result.data, 'gridbug-bin.step');
       }
     } catch (error) {
       console.error('Error exporting STEP:', error);
+    } finally {
+      setIsExportingStep(false);
     }
   };
   
@@ -103,6 +70,7 @@ const ReplicadViewer: React.FC<ReplicadViewerProps> = ({ width, height }) => {
 
   // Calculate the viewing area height
   const viewHeight = height - 200; // Leave room for controls
+  const isLoading = isModelGenerating;
 
   return (
     <Box sx={{ width: '100%' }}>
@@ -186,8 +154,8 @@ const ReplicadViewer: React.FC<ReplicadViewerProps> = ({ width, height }) => {
         <Stack direction="row" spacing={2}>
           <Button 
             variant="contained" 
-            onClick={exportSTEP}
-            disabled={isLoading}
+            onClick={handleExportSTEP}
+            disabled={isLoading || isStepLoading}
             startIcon={<Box component="span" sx={{ fontWeight: 'bold' }}>STEP</Box>}
             color="primary"
           >

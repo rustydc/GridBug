@@ -15,8 +15,8 @@ import { Point, ImageInfo } from './types';
 import { parseSVGPath } from './utils/svgParser';
 import { generateSVG } from './utils/svgExport';
 import { getNextColor } from './utils/color';
-import { initializeReplicad } from './utils/replicadUtils';
 import { useInitializeSam } from './workers/sam/samQueries';
+import { useInitializeReplicad } from './workers/replicad/replicadQueries';
 
 const App: React.FC = () => {
   const { 
@@ -114,19 +114,9 @@ const App: React.FC = () => {
     URL.revokeObjectURL(url);
   };
 
+  // Initialize workers when the app loads
   useInitializeSam();
-
-  // Initialize replicad when the app loads
-  useEffect(() => {
-    // Initialize replicad for 3D functionality
-    initializeReplicad()
-      .then(() => {
-        console.log('Replicad initialized and ready');
-      })
-      .catch(error => {
-        console.error('Failed to initialize replicad:', error);
-      });
-  }, []);
+  useInitializeReplicad();
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
