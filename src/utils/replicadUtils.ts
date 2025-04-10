@@ -91,13 +91,16 @@ export const convertShapesToModel = async (
       const rectX = -1 * (obj.position.x - min.x - width/2);
       const rectY = obj.position.y - min.y - height/2;
       
-      cutoutShape = replicad.drawRoundedRectangle(
+      // First create the basic shape
+      let rectShape = replicad.drawRoundedRectangle(
         obj.width, 
         obj.height,
         obj.radius
-      ).translate(rectX, rectY);
-    } 
-    else if (obj.type === 'spline') {
+      );
+      
+      rectShape = rectShape.rotate(obj.rotation, [0, 0]);
+      cutoutShape = rectShape.translate(rectX, rectY);
+    } else if (obj.type === 'spline') {
       // Create a proper spline path using bezier curves
       const splinePoints = obj.points;
       
@@ -141,9 +144,9 @@ export const convertShapesToModel = async (
       }
       
       // Close the shape
-      const sketch = sketcher.close();
+      let sketch = sketcher.close();
       
-      // Translate the sketch to the correct position
+      sketch = sketch.rotate(-obj.rotation, [0, 0]);
       cutoutShape = sketch.translate(splineX, splineY);
     }
     
@@ -153,7 +156,7 @@ export const convertShapesToModel = async (
 
     wallsShape = wallsShape.cut(cutoutShape);
   }
-  
+
   // Create a grid of individual base units
   console.log('Creating grid of base units...');
   let finalModel;
