@@ -154,8 +154,8 @@ export const convertShapesToModel = async (
     wallsShape = wallsShape.cut(cutoutShape);
   }
   
-  // Create a lofted base with beveled edges
-  console.log('Creating lofted base shape...');
+  // Create a grid of individual base units
+  console.log('Creating grid of base units...');
   let finalModel;
   
   // Top size - use GRID_SIZE - TOLERANCE for the outer dimension
@@ -163,23 +163,30 @@ export const convertShapesToModel = async (
   const middleDim = outerDim - 2.15; // 39.35mm - after 45-degree slope
   const bottomDim = middleDim - 0.8; // 38.55mm - after second 45-degree slope
   
+  // Calculate how many grid cells fit in the total area
+  const numUnitsX = Math.round(width / GRID_SIZE);
+  const numUnitsY = Math.round(height / GRID_SIZE);
+  
+  console.log(`Creating grid of ${numUnitsX}x${numUnitsY} units`);
+  
+  // Create a single base unit with beveled profile
   // Create profiles for lofting
   // Top profile at full size
-  const topProfile = replicad.drawRoundedRectangle(width, height, BIN_CORNER_RADIUS);
+  const topProfile = replicad.drawRoundedRectangle(outerDim, outerDim, BIN_CORNER_RADIUS);
   
   // Middle profile (after first 45-degree bevel) - slightly smaller
   const middleScale = middleDim / outerDim;
   const middleProfile = replicad.drawRoundedRectangle(
-    width * middleScale, 
-    height * middleScale, 
+    outerDim * middleScale, 
+    outerDim * middleScale, 
     BIN_CORNER_RADIUS * middleScale
   );
   
   // Bottom profile - smallest
   const bottomScale = bottomDim / outerDim;
   const bottomProfile = replicad.drawRoundedRectangle(
-    width * bottomScale, 
-    height * bottomScale, 
+    outerDim * bottomScale, 
+    outerDim * bottomScale, 
     BIN_CORNER_RADIUS * bottomScale
   );
   
@@ -196,23 +203,61 @@ export const convertShapesToModel = async (
   const flatSketch = middleProfile.sketchOnPlane("XY", flatHeight) as replicad.SketchInterface;
   const bottomSketch = bottomProfile.sketchOnPlane("XY", bottomHeight) as replicad.SketchInterface;
   
-  // Create the base by lofting through the profiles
-  // Extracting wires for lofting
-  const baseModel = topSketch.loftWith([middleSketch, flatSketch, bottomSketch ], {ruled: true}) as replicad.Solid;
-  console.log('Created lofted base with beveled profile');
+  // Create the base unit by lofting through the profiles
+  const baseUnit = topSketch.loftWith([middleSketch, flatSketch, bottomSketch], {ruled: true}) as replicad.Solid;
+  
+  // Clone and position units to create the complete base
+  let baseModel: replicad.Solid | null = null;
+  
+  // Calculate the starting position (centered grid)
+  const startX = -width/2 + (outerDim)/2;
+  const startY = -height/2 + (outerDim)/2;
+  
+  for (let y = 0; y < numUnitsY; y++) {
+    for (let x = 0; x < numUnitsX; x++) {
+      // Calculate position for this unit
+      const posX = startX + x * GRID_SIZE;
+      const posY = startY + y * GRID_SIZE;
+      
+      // Clone and position the base unit
+      const unitClone = baseUnit.clone().translate(posX, posY, 0);
+      
+      // Add to the combined model
+      if (baseModel === null) {
+        baseModel = unitClone;
+      } else {
+        baseModel = baseModel.fuse(unitClone);
+      }
+    }
+  }
+  
+  if (!baseModel) {
+    throw new Error('Failed to create base model grid');
+  }
+  
+  console.log(`Created grid of ${numUnitsX}x${numUnitsY} base units`);
+  
+  // Create a 1mm thick bottom for the bin
+  console.log('Creating bin bottom...');
+  const bottomThickness = 1.0; // 1mm thick bottom
+  
+  // Create the bottom as a simple extrusion of the base rectangle
+  const binBottomSketch = baseRect.sketchOnPlane("XY", baseHeight);
+  const bottomModel = binBottomSketch.extrude(bottomThickness) as replicad.Solid;
+  console.log(`Created ${bottomThickness}mm thick bin bottom`);
   
   // Create walls (with cutouts if any)
   console.log('Creating wall shape with cutouts...');
   let wallsModel;
   
   const wallsSketch = wallsShape.sketchOnPlane();
-  // Position walls on top of the base
-  wallsModel = wallsSketch.extrude(wallHeight).translate(0, 0, baseHeight) as replicad.Solid;
+  // Position walls on top of the base and the bottom
+  wallsModel = wallsSketch.extrude(wallHeight).translate(0, 0, baseHeight + bottomThickness) as replicad.Solid;
   console.log(`Created walls with height ${wallHeight}mm`);
   
-  // Combine the base and walls into a single model
-  finalModel = baseModel.fuse(wallsModel);
-  console.log('Successfully created final 3D model by combining base and walls');
+  // Combine the base, bottom, and walls into a single model
+  finalModel = baseModel.fuse(bottomModel).fuse(wallsModel);
+  console.log('Successfully created final 3D model by combining base units, bottom, and walls');
 
   return finalModel;
 };
