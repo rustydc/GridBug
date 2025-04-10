@@ -22,7 +22,7 @@ export function catmullRomSpline(p0: Point, p1: Point, p2: Point, p3: Point, t: 
   return { x, y };
 }
 
-function catmullToBezier(p0: Point, p1: Point, p2: Point, p3: Point): [Point, Point] {
+export function catmullToBezier(p0: Point, p1: Point, p2: Point, p3: Point): [Point, Point] {
   // Use α=0.5 for centripetal Catmull-Rom
   const getT = (p1: Point, p2: Point, alpha: number = 0.5): number => {
     const dx = p2.x - p1.x;

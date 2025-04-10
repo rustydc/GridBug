@@ -72,3 +72,6 @@ export interface ImageInfo {
   width: number;
   height: number;
 }
+
+// Type alias for all objects for 3D viewer
+export type ObjectData = Outline;

@@ -7,4 +7,14 @@ export default defineConfig({
     host: true
   },
   base: '',
+  optimizeDeps: {
+    exclude: ['replicad-opencascadejs']
+  },
+  build: {
+    sourcemap: true,
+    // Ensure wasm files are properly handled
+    assetsInlineLimit: 0
+  },
+  // Configure WASM file loading
+  assetsInclude: ['**/*.wasm'],
 });
