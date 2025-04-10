@@ -1,6 +1,15 @@
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { useSamWorker } from './samWorkerSingleton';
-import type { DataPoint, MaskResult } from './samWorkerApi';
+import { createComlinkSingleton } from 'react-use-comlink';
+import type { SAMWorkerAPI, DataPoint, MaskResult } from './samWorkerApi';
+
+// Create a worker instance first
+const worker = new Worker(new URL('./samWorker.ts', import.meta.url), { type: 'module' });
+
+/**
+ * Create a singleton worker with Comlink
+ * This ensures one worker instance is shared across components
+ */
+export const useSamWorker = createComlinkSingleton<SAMWorkerAPI>(worker);
 
 /**
  * Hook to initialize the SAM worker

@@ -6,8 +6,8 @@ import { pathToPoints } from '../utils/svgPathParser';
 import ZoomableSvgView, { useZoomContext } from './ZoomableSvgView';
 import { generateSplinePath } from '../utils/spline';
 import { simplifyPoints } from '../utils/geometry';
-import type { DataPoint } from '../utils/samWorkerApi';
-import { useProcessImage, useGenerateMask, useSamReady } from '../utils/samQueries';
+import type { DataPoint } from '../workers/sam/samWorkerApi';
+import { useProcessImage, useGenerateMask, useSamReady } from '../workers/sam/samQueries';
 
 // This component will be used inside ZoomableSvgView
 const MaskOverlay: React.FC<{

@@ -16,7 +16,7 @@ import { parseSVGPath } from './utils/svgParser';
 import { generateSVG } from './utils/svgExport';
 import { getNextColor } from './utils/color';
 import { initializeReplicad } from './utils/replicadUtils';
-import { useInitializeSam } from './utils/samQueries';
+import { useInitializeSam } from './workers/sam/samQueries';
 
 const App: React.FC = () => {
   const { 
