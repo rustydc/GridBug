@@ -98,7 +98,7 @@ export const convertShapesToModel = async (
         obj.radius
       );
       
-      rectShape = rectShape.rotate(obj.rotation, [0, 0]);
+      rectShape = rectShape.rotate(-obj.rotation, [0, 0]);
       cutoutShape = rectShape.translate(rectX, rectY);
     } else if (obj.type === 'spline') {
       // Create a proper spline path using bezier curves
