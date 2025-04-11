@@ -1,7 +1,7 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { Point, Bounds } from '../types';
-import { useStore } from '../store';
-import { transformPoint } from '../utils/geometry';
+import { Point, Bounds } from '../../types';
+import { useStore } from '../../store';
+import { transformPoint } from '../../utils/geometry';
 
 interface Props {
   position: Point;

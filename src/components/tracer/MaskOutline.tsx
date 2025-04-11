@@ -1,13 +1,13 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { Box, Button, CircularProgress, Typography, Slider } from '@mui/material';
-import { ImageInfo, Point } from '../types';
-import Potrace from '../utils/potrace';
-import { pathToPoints } from '../utils/svgPathParser';
+import { ImageInfo, Point } from '../../types';
+import Potrace from '../../utils/potrace';
+import { pathToPoints } from '../../utils/svgPathParser';
 import ZoomableSvgView, { useZoomContext } from './ZoomableSvgView';
-import { generateSplinePath } from '../utils/spline';
-import { simplifyPoints } from '../utils/geometry';
-import type { DataPoint } from '../workers/sam/samWorkerApi';
-import { useProcessImage, useGenerateMask, useSamReady } from '../workers/sam/samQueries';
+import { generateSplinePath } from '../../utils/spline';
+import { simplifyPoints } from '../../utils/geometry';
+import type { DataPoint } from '../../workers/sam/samWorkerApi';
+import { useProcessImage, useGenerateMask, useSamReady } from '../../workers/sam/samQueries';
 
 // This component will be used inside ZoomableSvgView
 const MaskOverlay: React.FC<{

@@ -1,5 +1,5 @@
 import React, { useRef, useEffect } from 'react';
-import { useStore } from '../store';
+import { useStore } from '../../store';
 import Grid from './Grid';
 import Outline from './Outline';
 import RoundedRectOutline from './RoundedRectOutline';

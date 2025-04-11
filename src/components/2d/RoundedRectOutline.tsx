@@ -1,7 +1,7 @@
 import React, { useRef } from 'react';
-import { RoundedRectOutline as RoundedRectOutlineType } from '../types';
-import { useStore } from '../store';
-import { untransformPoint } from '../utils/geometry';
+import { RoundedRectOutline as RoundedRectOutlineType } from '../../types';
+import { useStore } from '../../store';
+import { untransformPoint } from '../../utils/geometry';
 import TransformHandles from './TransformHandles';
 
 const RoundedRectOutline: React.FC<RoundedRectOutlineType> = ({ 

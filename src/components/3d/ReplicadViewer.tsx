@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { Box, Button, Slider, Stack, Typography } from '@mui/material';
-import { useStore } from '../store';
+import { useStore } from '../../store';
 import ThreeContext from './ThreeContext';
 import ReplicadMesh from './ReplicadMesh';
-import { useGenerateModel, useStepExport } from '../workers/replicad/replicadQueries';
+import { useGenerateModel, useStepExport } from '../../workers/replicad/replicadQueries';
 
 interface ReplicadViewerProps {
   width: number;

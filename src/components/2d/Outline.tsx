@@ -1,8 +1,8 @@
 import React, { useRef } from 'react';
-import { Point, Bounds } from '../types';
-import { useStore } from '../store';
-import { generateSplinePath, findClosestPointOnCurve } from '../utils/spline';
-import { transformPoint, untransformPoint } from '../utils/geometry';
+import { Point, Bounds } from '../../types';
+import { useStore } from '../../store';
+import { generateSplinePath, findClosestPointOnCurve } from '../../utils/spline';
+import { transformPoint, untransformPoint } from '../../utils/geometry';
 import TransformHandles from './TransformHandles';
 
 interface OutlineProps {

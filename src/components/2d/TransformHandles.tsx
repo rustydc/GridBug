@@ -1,5 +1,5 @@
 import React from 'react';
-import { Point, Bounds } from '../types';
+import { Point, Bounds } from '../../types';
 import RotationHandles from './RotationHandles';
 import RectTransformHandles from './RectTransformHandles';
 

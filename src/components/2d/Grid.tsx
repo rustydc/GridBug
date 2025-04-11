@@ -1,6 +1,6 @@
 import React from 'react';
-import { useStore } from '../store';
-import { calculateMinimalGridArea, GRID_SIZE, TOLERANCE } from '../utils/grid';
+import { useStore } from '../../store';
+import { calculateMinimalGridArea, GRID_SIZE, TOLERANCE } from '../../utils/grid';
 
 const CORNER_RADIUS = 7.5 / 2; // 7.5mm corner diameter
 const HALF_TOLERANCE = TOLERANCE / 2; // Half of tolerance for adjusting each edge

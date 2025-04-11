@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { Box, Button, FormControl, InputLabel, Select, MenuItem } from '@mui/material';
-import { ImageInfo } from '../types';
-import { computeTransformMatrix, transformImageData } from '../utils/geometry';
+import { ImageInfo } from '../../types';
+import { computeTransformMatrix, transformImageData } from '../../utils/geometry';
 import ZoomableSvgView, { useZoomContext } from './ZoomableSvgView';
 
 const PAPER_SIZES = {

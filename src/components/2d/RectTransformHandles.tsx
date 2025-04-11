@@ -1,6 +1,6 @@
 import React, { useRef } from 'react';
-import { Point, Bounds } from '../types';
-import { useStore } from '../store';
+import { Point, Bounds } from '../../types';
+import { useStore } from '../../store';
 
 interface Props {
   position: Point;
