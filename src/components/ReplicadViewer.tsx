@@ -3,7 +3,7 @@ import { Box, Button, Slider, Stack, Typography } from '@mui/material';
 import { useStore } from '../store';
 import ThreeContext from './ThreeContext';
 import ReplicadMesh from './ReplicadMesh';
-import { useGenerateModel, useStepExport, ReplicadFaces, ReplicadEdges } from '../workers/replicad/replicadQueries';
+import { useGenerateModel, useStepExport } from '../workers/replicad/replicadQueries';
 
 interface ReplicadViewerProps {
   width: number;
@@ -27,7 +27,6 @@ const ReplicadViewer: React.FC<ReplicadViewerProps> = ({ width, height }) => {
   
   // Use the query for STEP export, but only enable it when needed
   const {
-    data: stepBlob,
     isLoading: isStepLoading,
     error: stepError,
     refetch: refetchStep

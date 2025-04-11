@@ -17,4 +17,7 @@ export default defineConfig({
   },
   // Configure WASM file loading
   assetsInclude: ['**/*.wasm'],
+  worker: {
+    format: 'es',
+  }
 });

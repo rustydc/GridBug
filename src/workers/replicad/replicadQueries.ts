@@ -14,10 +14,11 @@ function hashOutline(outline: ObjectData): string {
   switch (outline.type) {
     case 'roundedRect':
       return `rect:${outline.id}:${outline.width}:${outline.height}:${outline.radius}:${outline.position.x}:${outline.position.y}:${outline.rotation}`;
-    case 'spline':
+    case 'spline': {
       // Create a hash of all points in the spline
       const pointsHash = outline.points.map(p => `${p.x},${p.y}`).join(';');
       return `spline:${outline.id}:${outline.position.x}:${outline.position.y}:${outline.rotation}:${pointsHash}`;
+    }
   }
 }
 
@@ -29,7 +30,7 @@ function createOutlinesKey(outlines: ObjectData[]): string[] {
 }
 
 // Create a worker instance first
-const worker = new Worker(new URL('./replicadWorker.ts', import.meta.url), { type: 'module' });
+const worker = new Worker(new URL('./replicadWorker.ts', import.meta.url), {type: 'module'});
 
 /**
  * Create a singleton worker with Comlink
