@@ -4,12 +4,8 @@ import { useStore } from '../store';
 import { untransformPoint } from '../utils/geometry';
 import TransformHandles from './TransformHandles';
 
-interface RoundedRectOutlineProps extends RoundedRectOutlineType {
-  onRotateRequest?: (outlineId: string) => void;
-}
-
-const RoundedRectOutline: React.FC<RoundedRectOutlineProps> = ({ 
-  id, bounds, width, height, radius, position, rotation, selected, editMode, color, onRotateRequest 
+const RoundedRectOutline: React.FC<RoundedRectOutlineType> = ({ 
+  id, bounds, width, height, radius, position, rotation, selected, editMode, color 
 }) => {
   const dragRef = useRef<{ startX: number; startY: number; handleType?: 'move' | 'resize' | 'radius' }>({ startX: 0, startY: 0 });
   const { updateOutline, selectOutline, updateMultipleOutlines, outlines, viewState } = useStore();
@@ -163,11 +159,7 @@ const RoundedRectOutline: React.FC<RoundedRectOutlineProps> = ({
     document.removeEventListener('mouseup', handleMouseUp);
   };
 
-  const handleRotateRequest = () => {
-    if (onRotateRequest) {
-      onRotateRequest(id);
-    }
-  };
+  // No longer need handleRotateRequest as TransformHandles handles rotation directly
 
   return (
     <>
@@ -222,7 +214,6 @@ const RoundedRectOutline: React.FC<RoundedRectOutlineProps> = ({
             bounds={bounds}
             position={position}
             rotation={rotation}
-            onRotate={handleRotateRequest}
             outlineId={id}
             type="roundedRect"
           />

@@ -20,11 +20,10 @@ interface OutlineProps {
     height: number;
     position: Point;
   };
-  onRotateRequest?: (outlineId: string) => void;
 }
 
 const Outline: React.FC<OutlineProps> = ({ 
-  id, bounds, points, position, rotation, selected, editMode, color, bitmap, onRotateRequest 
+  id, bounds, points, position, rotation, selected, editMode, color, bitmap
 }) => {
   const dragRef = useRef<{ startX: number; startY: number; pointIndex?: number }>({ startX: 0, startY: 0 });
   const { updateOutline, selectOutline, updateMultipleOutlines, outlines, viewState } = useStore();
@@ -163,11 +162,7 @@ const Outline: React.FC<OutlineProps> = ({
     document.removeEventListener('mouseup', handleMouseUp);
   };
 
-  const handleRotateRequest = () => {
-    if (onRotateRequest) {
-      onRotateRequest(id);
-    }
-  };
+  // No longer need handleRotateRequest as TransformHandles handles rotation directly
 
   const handlePointDelete = (index: number, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -262,7 +257,6 @@ const Outline: React.FC<OutlineProps> = ({
             points={points}
             position={position}
             rotation={rotation}
-            onRotate={handleRotateRequest}
             bounds={bounds}
             outlineId={id}
           />
