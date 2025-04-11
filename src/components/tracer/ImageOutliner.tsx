@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { Box } from '@mui/material';
-import { ImageInfo, Point } from '../types';
+import { ImageInfo, Point } from '../../types';
 import ObjectView from './ObjectView';
 import PaperFinder from './PaperFinder';
 import MaskOutline from './MaskOutline';

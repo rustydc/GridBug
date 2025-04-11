@@ -1,20 +1,6 @@
 import * as Comlink from 'comlink';
 import { SAMWorkerAPI, DataPoint, MaskResult } from './samWorkerApi';
-
-// Dynamically import the transformers library from CDN
-// Use a separate function to handle the import to avoid top-level await
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let transformersModule: any;
-
-async function loadTransformers() {
-  try {
-    transformersModule = await import("https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.3.3");
-    return transformersModule;
-  } catch (error) {
-    console.error("Failed to load transformers library:", error);
-    throw error;
-  }
-}
+import * as transformers from '@huggingface/transformers';
 
 // We adopt the singleton pattern to enable lazy-loading of the model and processor.
 class SegmentAnythingSingleton {
@@ -26,24 +12,16 @@ class SegmentAnythingSingleton {
   static quantized = true;
 
   static async getInstance() {
-    // Load the transformers module if not already loaded
-    if (!transformersModule) {
-      transformersModule = await loadTransformers();
-    }
-    
-    // Allow downloading models from the Hub
-    transformersModule.env.allowLocalModels = false;
-    
     // Load model and processor if not already loaded
     if (!this.model) { 
-      this.model = transformersModule.SamModel.from_pretrained(this.model_id, {
+      this.model = await transformers.SamModel.from_pretrained(this.model_id, {
         dtype: "fp16",
         device: 'webgpu'
       });
     }
     
     if (!this.processor) {
-      this.processor = transformersModule.AutoProcessor.from_pretrained(this.model_id);
+      this.processor = await transformers.AutoProcessor.from_pretrained(this.model_id, { revision: "main" });
     }
 
     return Promise.all([this.model, this.processor]);
@@ -65,9 +43,6 @@ class SAMWorkerImpl implements SAMWorkerAPI {
 
   async initialize(): Promise<void> {
     try {
-      // Load transformers library
-      await loadTransformers();
-      
       // Initialize model and processor
       [this.model, this.processor] = await SegmentAnythingSingleton.getInstance();
       
@@ -112,7 +87,7 @@ class SAMWorkerImpl implements SAMWorkerAPI {
       }
 
       // Read the image and compute embeddings
-      const image = await transformersModule.RawImage.read(imageUrl);
+      const image = await transformers.RawImage.read(imageUrl);
       this.imageInputs = await this.processor(image);
       this.imageEmbeddings = await this.model.get_image_embeddings(this.imageInputs);
     } finally {
@@ -132,12 +107,12 @@ class SAMWorkerImpl implements SAMWorkerAPI {
     const pixelPoints = points.map(x => [x.point[0] * reshaped[1], x.point[1] * reshaped[0]]);
     const labels = points.map(x => BigInt(x.label));
 
-    const input_points = new transformersModule.Tensor(
+    const input_points = new transformers.Tensor(
       'float32',
       pixelPoints.flat(Infinity),
       [1, 1, pixelPoints.length, 2],
     );
-    const input_labels = new transformersModule.Tensor(
+    const input_labels = new transformers.Tensor(
       'int64',
       labels.flat(Infinity),
       [1, 1, labels.length],
@@ -156,8 +131,15 @@ class SAMWorkerImpl implements SAMWorkerAPI {
       this.imageInputs.reshaped_input_sizes
     );
 
+    // Convert the raw image to the expected format
+    const rawImage = transformers.RawImage.fromTensor(masks[0][0]);
+    
     return {
-      mask: transformersModule.RawImage.fromTensor(masks[0][0]),
+      mask: {
+        data: new Uint8Array(rawImage.data),
+        width: rawImage.width,
+        height: rawImage.height
+      },
       scores: outputs.iou_scores.data,
     };
   }

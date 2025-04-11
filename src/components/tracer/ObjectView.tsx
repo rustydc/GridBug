@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Box, Button } from '@mui/material';
-import { ImageInfo } from '../types';
+import { ImageInfo } from '../../types';
 import ZoomableSvgView, { useZoomContext } from './ZoomableSvgView';
 
 interface Props {

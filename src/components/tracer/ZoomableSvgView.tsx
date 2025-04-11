@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect, useRef, createContext, useContext } from 'react';
 import { Box } from '@mui/material';
-import { ImageInfo } from '../types';
+import { ImageInfo } from '../../types';
 
 interface ZoomContextType {
   zoom: number;
