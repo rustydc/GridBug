@@ -8,10 +8,8 @@ import { getNextColor } from './utils/color';
 import { calculateSplineBounds } from './utils/spline';
 
 // Default values
-const DEFAULT_ZOOM = 1;
-const BASE_VIEW_WIDTH = 800;
-const BASE_VIEW_HEIGHT = 600;
-const PADDING = 84; // 2 grid cells of padding
+const DEFAULT_ZOOM = 10;
+const PADDING = 21; // 0.5 grid cells of padding
 
 // Helper to calculate bounds for a rounded rectangle
 const calculateRectBounds = (width: number, height: number): Bounds => {
@@ -57,8 +55,13 @@ interface State {
 // Helper function to calculate viewBox from viewState
 const calculateViewBox = (viewState: ViewState): ViewBox => {
   const { center, zoom } = viewState;
-  const width = BASE_VIEW_WIDTH / zoom;
-  const height = BASE_VIEW_HEIGHT / zoom;
+  
+  // Use window dimensions instead of fixed constants for better responsiveness
+  const viewWidth = window.innerWidth;
+  const viewHeight = window.innerHeight - 64; // Subtract header height
+  
+  const width = viewWidth / zoom;
+  const height = viewHeight / zoom;
   
   return {
     x: center.x - width / 2,
@@ -73,7 +76,7 @@ export const useStore = create<State>()(
     temporal((set, get) => ({
       outlines: [],
       viewState: {
-        center: { x: 0, y: 0 },
+        center: { x: 21, y: 21 },
         zoom: DEFAULT_ZOOM
       },
       
@@ -138,12 +141,16 @@ export const useStore = create<State>()(
           const centerY = (min.y + max.y) / 2;
           
           // Calculate required zoom to fit the content with padding
-          const contentWidth = max.x - min.x + PADDING * 2;
-          const contentHeight = max.y - min.y + PADDING * 2;
+          const contentWidth = max.x - min.x + PADDING;
+          const contentHeight = max.y - min.y + PADDING;
+          
+          // Use actual window dimensions instead of fixed BASE_VIEW values
+          const viewWidth = window.innerWidth;
+          const viewHeight = window.innerHeight - 64; // Subtract header height
           
           // Calculate zoom based on both dimensions and take the smaller one to ensure everything fits
-          const zoomX = BASE_VIEW_WIDTH / contentWidth;
-          const zoomY = BASE_VIEW_HEIGHT / contentHeight;
+          const zoomX = viewWidth / contentWidth;
+          const zoomY = viewHeight / contentHeight;
           const zoom = Math.min(zoomX, zoomY);
           
           return {
@@ -173,7 +180,6 @@ export const useStore = create<State>()(
               bitmap
             } as SplineOutline]
           };
-          get().centerView();
           return newState;
         },
         false,
@@ -197,7 +203,6 @@ export const useStore = create<State>()(
               bounds: calculateRectBounds(width, height)
             } as RoundedRectOutline]
           };
-          get().centerView();
           return newState;
         },
         false,
