@@ -262,8 +262,19 @@ const TransformHandles: React.FC<Props> = ({ bounds, position, rotation, outline
     pt.y = e.clientY;
     const svgP = pt.matrixTransform(svg.getScreenCTM()?.inverse());
 
-    const dx = svgP.x - dragRef.current.startX;
-    const dy = svgP.y - dragRef.current.startY;
+    // Convert the mouse movement to the rotated coordinate system
+    // First, calculate raw movement in screen space
+    const rawDx = svgP.x - dragRef.current.startX;
+    const rawDy = svgP.y - dragRef.current.startY;
+    
+    // Adjust for rotation - convert screen coordinates to object's local coordinate system
+    const rad = (-rotation * Math.PI) / 180; // Convert to radians and invert
+    const cos = Math.cos(rad);
+    const sin = Math.sin(rad);
+    
+    // Apply rotation transformation to the delta
+    const dx = rawDx * cos - rawDy * sin;
+    const dy = rawDx * sin + rawDy * cos;
 
     // Calculate new position, width, and height based on which handle is being dragged
     let newBounds = { ...dragRef.current.startBounds };
@@ -319,43 +330,40 @@ const TransformHandles: React.FC<Props> = ({ bounds, position, rotation, outline
       switch (dragRef.current.handlePosition) {
         case 'top':
           newBounds.minY = dragRef.current.startBounds.minY + dy;
-          newPosition.y = dragRef.current.startPosition.y + dy / 2;
+          // Calculate position adjustment accounting for rotation
+          newPosition = calculatePositionAdjustment(dx, dy, 0, dy/2, rotation, dragRef.current.startPosition);
           break;
         case 'right':
           newBounds.maxX = dragRef.current.startBounds.maxX + dx;
-          newPosition.x = dragRef.current.startPosition.x + dx / 2;
+          newPosition = calculatePositionAdjustment(dx, dy, dx/2, 0, rotation, dragRef.current.startPosition);
           break;
         case 'bottom':
           newBounds.maxY = dragRef.current.startBounds.maxY + dy;
-          newPosition.y = dragRef.current.startPosition.y + dy / 2;
+          newPosition = calculatePositionAdjustment(dx, dy, 0, dy/2, rotation, dragRef.current.startPosition);
           break;
         case 'left':
           newBounds.minX = dragRef.current.startBounds.minX + dx;
-          newPosition.x = dragRef.current.startPosition.x + dx / 2;
+          newPosition = calculatePositionAdjustment(dx, dy, dx/2, 0, rotation, dragRef.current.startPosition);
           break;
         case 'topLeft':
           newBounds.minX = dragRef.current.startBounds.minX + dx;
           newBounds.minY = dragRef.current.startBounds.minY + dy;
-          newPosition.x = dragRef.current.startPosition.x + dx / 2;
-          newPosition.y = dragRef.current.startPosition.y + dy / 2;
+          newPosition = calculatePositionAdjustment(dx, dy, dx/2, dy/2, rotation, dragRef.current.startPosition);
           break;
         case 'topRight':
           newBounds.maxX = dragRef.current.startBounds.maxX + dx;
           newBounds.minY = dragRef.current.startBounds.minY + dy;
-          newPosition.x = dragRef.current.startPosition.x + dx / 2;
-          newPosition.y = dragRef.current.startPosition.y + dy / 2;
+          newPosition = calculatePositionAdjustment(dx, dy, dx/2, dy/2, rotation, dragRef.current.startPosition);
           break;
         case 'bottomRight':
           newBounds.maxX = dragRef.current.startBounds.maxX + dx;
           newBounds.maxY = dragRef.current.startBounds.maxY + dy;
-          newPosition.x = dragRef.current.startPosition.x + dx / 2;
-          newPosition.y = dragRef.current.startPosition.y + dy / 2;
+          newPosition = calculatePositionAdjustment(dx, dy, dx/2, dy/2, rotation, dragRef.current.startPosition);
           break;
         case 'bottomLeft':
           newBounds.minX = dragRef.current.startBounds.minX + dx;
           newBounds.maxY = dragRef.current.startBounds.maxY + dy;
-          newPosition.x = dragRef.current.startPosition.x + dx / 2;
-          newPosition.y = dragRef.current.startPosition.y + dy / 2;
+          newPosition = calculatePositionAdjustment(dx, dy, dx/2, dy/2, rotation, dragRef.current.startPosition);
           break;
       }
     }
@@ -372,6 +380,31 @@ const TransformHandles: React.FC<Props> = ({ bounds, position, rotation, outline
         position: newPosition
       });
     }
+  };
+  
+  // Helper function to calculate the new position after a resize, accounting for rotation
+  const calculatePositionAdjustment = (
+    dx: number, 
+    dy: number, 
+    offsetX: number, 
+    offsetY: number, 
+    rotation: number,
+    startPosition: Point
+  ): Point => {
+    // Convert rotation to radians
+    const rad = (rotation * Math.PI) / 180;
+    const cos = Math.cos(rad);
+    const sin = Math.sin(rad);
+    
+    // Calculate position adjustment in rotated space
+    // This transforms the offset vector by the rotation matrix
+    const adjustedX = offsetX * cos - offsetY * sin;
+    const adjustedY = offsetX * sin + offsetY * cos;
+    
+    return {
+      x: startPosition.x + adjustedX,
+      y: startPosition.y + adjustedY
+    };
   };
 
   const handleMouseUp = () => {
