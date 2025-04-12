@@ -199,22 +199,8 @@ class ReplicadWorkerImpl implements ReplicadWorkerAPI {
     // Create profiles for lofting
     // Top profile at full size
     const topProfile = replicad.drawRoundedRectangle(outerDim, outerDim, BIN_CORNER_RADIUS);
-    
-    // Middle profile (after first 45-degree bevel) - slightly smaller
-    const middleScale = middleDim / outerDim;
-    const middleProfile = replicad.drawRoundedRectangle(
-      outerDim * middleScale, 
-      outerDim * middleScale, 
-      BIN_CORNER_RADIUS * middleScale
-    );
-    
-    // Bottom profile - smallest
-    const bottomScale = bottomDim / outerDim;
-    const bottomProfile = replicad.drawRoundedRectangle(
-      outerDim * bottomScale, 
-      outerDim * bottomScale, 
-      BIN_CORNER_RADIUS * bottomScale
-    );
+    const middleProfile = topProfile.offset(-2.15/2);
+    const bottomProfile = middleProfile.offset(-0.8/2);
     
     // Heights for the profiles
     const topHeight = baseHeight; // Top of the base
@@ -231,10 +217,20 @@ class ReplicadWorkerImpl implements ReplicadWorkerAPI {
     
     // Create the base unit by lofting through the profiles
     const baseUnit = topSketch.loftWith([middleSketch, flatSketch, bottomSketch], {ruled: true}) as any;
+        
+    // Create a 1mm thick bottom for the bin
+    console.log('Creating bin bottom...');
+    const bottomThickness = 1.0; // 1mm thick bottom
+    
+    // Create the bottom as a simple extrusion of the base rectangle
+    const binBottomSketch = baseRect.sketchOnPlane("XY", baseHeight);
+    const bottomModel = binBottomSketch.extrude(bottomThickness) as any;
+    console.log(`Created ${bottomThickness}mm thick bin bottom`);
     
     // Clone and position units to create the complete base
-    let baseModel: any = null;
-    
+    let baseModel: any = bottomModel;
+
+  
     // Calculate the starting position (centered grid)
     const startX = -width/2 + (outerDim)/2;
     const startY = -height/2 + (outerDim)/2;
@@ -248,12 +244,8 @@ class ReplicadWorkerImpl implements ReplicadWorkerAPI {
         // Clone and position the base unit
         const unitClone = baseUnit.clone().translate(posX, posY, 0);
         
-        // Add to the combined model
-        if (baseModel === null) {
-          baseModel = unitClone;
-        } else {
-          baseModel = baseModel.fuse(unitClone);
-        }
+        // Add to the combined model with commonFace optimization
+        baseModel = baseModel.fuse(unitClone, { optimisation: "commonFace" });
       }
     }
     
@@ -262,15 +254,6 @@ class ReplicadWorkerImpl implements ReplicadWorkerAPI {
     }
     
     console.log(`Created grid of ${numUnitsX}x${numUnitsY} base units`);
-    
-    // Create a 1mm thick bottom for the bin
-    console.log('Creating bin bottom...');
-    const bottomThickness = 1.0; // 1mm thick bottom
-    
-    // Create the bottom as a simple extrusion of the base rectangle
-    const binBottomSketch = baseRect.sketchOnPlane("XY", baseHeight);
-    const bottomModel = binBottomSketch.extrude(bottomThickness) as any;
-    console.log(`Created ${bottomThickness}mm thick bin bottom`);
     
     // Create walls (with cutouts if any)
     console.log('Creating wall shape with cutouts...');
@@ -281,9 +264,8 @@ class ReplicadWorkerImpl implements ReplicadWorkerAPI {
     wallsModel = wallsSketch.extrude(wallHeight).translate(0, 0, baseHeight + bottomThickness) as any;
     console.log(`Created walls with height ${wallHeight}mm`);
     
-    // Combine the base, bottom, and walls into a single model
-    finalModel = baseModel.fuse(bottomModel).fuse(wallsModel);
-    console.log('Successfully created final 3D model by combining base units, bottom, and walls');
+    finalModel = baseModel.fuse(wallsModel, { optimisation: "commonFace" });
+    console.log('Successfully created final 3D model by combining base units, bottom, and walls with commonFace optimization');
     
     return finalModel;
   }
