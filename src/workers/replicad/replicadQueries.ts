@@ -79,8 +79,8 @@ export function useReplicadReady() {
 export function useGenerateModel(
   outlines: ObjectData[],
   totalHeight: number,
-  wallThickness: number,
-  baseHeight: number = 4.75
+  baseHeight: number = 4.75,
+  enabled: boolean = true
 ) {
   const { proxy: replicadWorker } = useReplicadWorker();
   
@@ -88,7 +88,7 @@ export function useGenerateModel(
   const outlineKeys = createOutlinesKey(outlines);
   
   return useQuery({
-    queryKey: ['replicad', 'model', totalHeight, wallThickness, baseHeight, outlines.length, outlineKeys],
+    queryKey: ['replicad', 'model', totalHeight, baseHeight, outlines.length, outlineKeys],
     queryFn: async () => {
       // Only generate model if there are outlines
       if (outlines.length === 0) {
@@ -98,7 +98,6 @@ export function useGenerateModel(
       return await replicadWorker.generateModel(
         outlines,
         totalHeight,
-        wallThickness,
         baseHeight
       );
     },
@@ -106,8 +105,8 @@ export function useGenerateModel(
     refetchOnWindowFocus: false,
     // Results don't go stale unless inputs change
     staleTime: Infinity,
-    // Enable the query only when there are outlines
-    enabled: outlines.length > 0,
+    // Enable the query only when there are outlines and when explicitly enabled
+    enabled: outlines.length > 0 && enabled,
   });
 }
 
@@ -118,7 +117,6 @@ export function useGenerateModel(
 export function useStepExport(
   outlines: ObjectData[],
   totalHeight: number,
-  wallThickness: number,
   baseHeight: number = 4.75,
   enabled: boolean = false
 ) {
@@ -128,7 +126,7 @@ export function useStepExport(
   const outlineKeys = createOutlinesKey(outlines);
   
   return useQuery({
-    queryKey: ['replicad', 'step', totalHeight, wallThickness, baseHeight, outlines.length, outlineKeys],
+    queryKey: ['replicad', 'step', totalHeight, baseHeight, outlines.length, outlineKeys],
     queryFn: async () => {
       // Only generate STEP if there are outlines
       if (outlines.length === 0) {
@@ -138,7 +136,6 @@ export function useStepExport(
       return await replicadWorker.exportSTEP(
         outlines,
         totalHeight,
-        wallThickness,
         baseHeight
       );
     },

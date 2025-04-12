@@ -38,11 +38,10 @@ export interface ReplicadWorkerAPI {
    * Generates a 3D model from outlines
    * @param outlines Array of object data to process
    * @param totalHeight The total height of the bin in mm
-   * @param wallThickness The thickness of the walls in mm
    * @param baseHeight Optional base height in mm (default 4.75mm)
    * @returns Promise that resolves with the model data
    */
-  generateModel(outlines: ObjectData[], totalHeight: number, wallThickness: number, baseHeight?: number): Promise<{
+  generateModel(outlines: ObjectData[], totalHeight: number, baseHeight?: number): Promise<{
     faces: ReplicadFaces;
     edges: ReplicadEdges;
   } | null>;
@@ -51,9 +50,8 @@ export interface ReplicadWorkerAPI {
    * Export a model as STEP format
    * @param outlines Array of object data to process
    * @param totalHeight The total height of the bin in mm
-   * @param wallThickness The thickness of the walls in mm
    * @param baseHeight Optional base height in mm (default 4.75mm)
    * @returns Promise with the STEP data as a blob
    */
-  exportSTEP(outlines: ObjectData[], totalHeight: number, wallThickness: number, baseHeight?: number): Promise<Blob>;
+  exportSTEP(outlines: ObjectData[], totalHeight: number, baseHeight?: number): Promise<Blob>;
 }

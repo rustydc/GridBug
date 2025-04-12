@@ -6,7 +6,6 @@ import FileUploadIcon from '@mui/icons-material/FileUpload';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import ImageIcon from '@mui/icons-material/Image';
 import GitHubIcon from '@mui/icons-material/GitHub';
-import ThreeDRotationIcon from '@mui/icons-material/ThreeDRotation';
 import MainCanvas from './components/2d/MainCanvas';
 import ImageOutliner from './components/tracer/ImageOutliner';
 import ReplicadViewer from './components/3d/ReplicadViewer';
@@ -216,7 +215,7 @@ const App: React.FC = () => {
         gap: 2,
         zIndex: 1000 
       }}>
-        {viewMode === '2d' ? (
+        {viewMode === '2d' && (
           <>
             <Tooltip title="Insert spline">
               <Fab 
@@ -281,16 +280,6 @@ const App: React.FC = () => {
               </Fab>
             </Tooltip>
           </>
-        ) : (
-          <Tooltip title="Switch to 2D Editor">
-            <Fab 
-              color="primary" 
-              aria-label="switch-to-2d"
-              onClick={() => setViewMode('2d')}
-            >
-              <ThreeDRotationIcon />
-            </Fab>
-          </Tooltip>
         )}
       </Box>
 

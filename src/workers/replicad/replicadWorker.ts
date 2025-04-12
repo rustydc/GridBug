@@ -82,7 +82,6 @@ class ReplicadWorkerImpl implements ReplicadWorkerAPI {
   private async createModel(
     outlines: ObjectData[],
     totalHeight: number,
-    wallThickness: number,
     baseHeight: number = 4.75
   ): Promise<any> {
     // Make sure replicad is initialized
@@ -101,8 +100,8 @@ class ReplicadWorkerImpl implements ReplicadWorkerAPI {
     const height = max.y - min.y;
     
     // Constants for the bin
-    const BIN_CORNER_RADIUS = 7.5; // Base corner radius in mm
-    const wallHeight = totalHeight - baseHeight; // Calculate the wall height
+    const BIN_CORNER_RADIUS = 7.5 / 2; // Base corner radius in mm
+    const wallHeight = totalHeight - baseHeight - 1; // Calculate the wall height
     
     // Draw the standard 41.5mm base with 7.5mm corner radius
     const baseRect = replicad.drawRoundedRectangle(max.x - min.x, max.y - min.y, BIN_CORNER_RADIUS);
@@ -280,7 +279,6 @@ class ReplicadWorkerImpl implements ReplicadWorkerAPI {
   private generateCacheKey(
     outlines: ObjectData[],
     totalHeight: number,
-    wallThickness: number,
     baseHeight: number
   ): string {
     // Create a hash from outlines - similar to the hash function in replicadQueries.ts
@@ -296,13 +294,12 @@ class ReplicadWorkerImpl implements ReplicadWorkerAPI {
     }).join('|');
     
     // Combine with other parameters to create a unique key
-    return `model:${outlinesHash}:${totalHeight}:${wallThickness}:${baseHeight}`;
+    return `model:${outlinesHash}:${totalHeight}:${baseHeight}`;
   }
 
   async generateModel(
     outlines: ObjectData[],
     totalHeight: number,
-    wallThickness: number,
     baseHeight: number = 4.75
   ): Promise<{ faces: ReplicadFaces; edges: ReplicadEdges } | null> {
     if (outlines.length === 0) {
@@ -310,14 +307,14 @@ class ReplicadWorkerImpl implements ReplicadWorkerAPI {
     }
     
     // Generate cache key
-    const cacheKey = this.generateCacheKey(outlines, totalHeight, wallThickness, baseHeight);
+    const cacheKey = this.generateCacheKey(outlines, totalHeight, baseHeight);
     
     // Check if we have a cached model
     let finalModel = modelCache.get(cacheKey);
     
     if (!finalModel) {
       console.log('Model not found in cache, creating new model');
-      finalModel = await this.createModel(outlines, totalHeight, wallThickness, baseHeight);
+      finalModel = await this.createModel(outlines, totalHeight, baseHeight);
       
       // Store in cache for future use
       modelCache.set(cacheKey, finalModel);
@@ -336,7 +333,6 @@ class ReplicadWorkerImpl implements ReplicadWorkerAPI {
   async exportSTEP(
     outlines: ObjectData[],
     totalHeight: number,
-    wallThickness: number,
     baseHeight: number = 4.75
   ): Promise<Blob> {
     if (outlines.length === 0) {
@@ -345,14 +341,14 @@ class ReplicadWorkerImpl implements ReplicadWorkerAPI {
     
     try {
       // Generate cache key
-      const cacheKey = this.generateCacheKey(outlines, totalHeight, wallThickness, baseHeight);
+      const cacheKey = this.generateCacheKey(outlines, totalHeight, baseHeight);
       
       // Check if we have a cached model
       let model = modelCache.get(cacheKey);
       
       if (!model) {
         console.log('Model not found in cache for STEP export, creating new model');
-        model = await this.createModel(outlines, totalHeight, wallThickness, baseHeight);
+        model = await this.createModel(outlines, totalHeight, baseHeight);
         
         // Store in cache for future use
         modelCache.set(cacheKey, model);

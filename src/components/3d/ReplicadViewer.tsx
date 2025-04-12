@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Box, Button, Slider, Stack, Typography } from '@mui/material';
+import { Box, Fab, Slider, Stack, Tooltip, Typography } from '@mui/material';
+import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import { useStore } from '../../store';
 import ThreeContext from './ThreeContext';
 import ReplicadMesh from './ReplicadMesh';
@@ -15,22 +16,24 @@ const ReplicadViewer: React.FC<ReplicadViewerProps> = ({ width, height }) => {
   console.log('ReplicadViewer received outlines:', outlines?.length || 0);
   
   const [binHeight, setBinHeight] = useState<number>(20);
-  const [wallThickness, setWallThickness] = useState<number>(1.2);
+  const [tempBinHeight, setTempBinHeight] = useState<number>(20);
+  const [isDragging, setIsDragging] = useState<boolean>(false);
   const [isExportingStep, setIsExportingStep] = useState(false);
 
   // Use TanStack Query with proper caching
   const { 
     data: meshData, 
     isLoading: isModelGenerating,
-    error: modelError
-  } = useGenerateModel(outlines, binHeight, wallThickness);
+    error: modelError,
+    isFetching: isModelFetching,
+  } = useGenerateModel(outlines, binHeight, 4.75, !isDragging);
   
   // Use the query for STEP export, but only enable it when needed
   const {
     isLoading: isStepLoading,
     error: stepError,
     refetch: refetchStep
-  } = useStepExport(outlines, binHeight, wallThickness, 4.75, isExportingStep);
+  } = useStepExport(outlines, binHeight, 4.75, isExportingStep);
 
   // Log errors
   if (modelError) {
@@ -68,8 +71,24 @@ const ReplicadViewer: React.FC<ReplicadViewerProps> = ({ width, height }) => {
   };
 
   // Calculate the viewing area height
-  const viewHeight = height - 200; // Leave room for controls
-  const isLoading = isModelGenerating;
+  const viewHeight = height - 60; // Leave minimal room for the slider
+  const isLoading = isModelGenerating || isModelFetching;
+  
+  // Handler for when slider dragging starts
+  const handleSliderDragStart = () => {
+    setIsDragging(true);
+  };
+  
+  // Handler for when slider dragging stops - update the actual bin height value
+  const handleSliderDragStop = () => {
+    setIsDragging(false);
+    setBinHeight(tempBinHeight);
+  };
+  
+  // Update temp bin height while dragging
+  const handleSliderChange = (_: Event, value: number | number[]) => {
+    setTempBinHeight(value as number);
+  };
 
   return (
     <Box sx={{ width: '100%' }}>
@@ -77,7 +96,6 @@ const ReplicadViewer: React.FC<ReplicadViewerProps> = ({ width, height }) => {
         sx={{ 
           width: width, 
           height: viewHeight,
-          border: '1px solid #ccc',
           position: 'relative',
           overflow: 'hidden',
           backgroundColor: '#f7f7f7',
@@ -115,53 +133,44 @@ const ReplicadViewer: React.FC<ReplicadViewerProps> = ({ width, height }) => {
       </Box>
       
       {/* Controls and settings */}
-      <Stack spacing={2} sx={{ mt: 2, p: 2, border: '1px solid #eee', borderRadius: 1 }}>
-        <Typography variant="h6" gutterBottom>3D Model Settings</Typography>
-        
-        <Box>
-          <Typography gutterBottom>Bin Height (mm)</Typography>
+      <Stack spacing={0} sx={{ mt: 0.5, py: 0.5, px: 2, border: '1px solid #eee', borderRadius: 1 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Typography sx={{ minWidth: '120px' }}>Bin Height (mm)</Typography>
           <Slider
-            value={binHeight}
-            onChange={(_, value) => setBinHeight(value as number)}
+            value={isDragging ? tempBinHeight : binHeight}
+            onChange={handleSliderChange}
+            onMouseDown={handleSliderDragStart}
+            onMouseUp={handleSliderDragStop}
+            onTouchStart={handleSliderDragStart}
+            onTouchEnd={handleSliderDragStop}
             min={5}
             max={100}
             step={1}
             valueLabelDisplay="auto"
             color="primary"
-            sx={{ mb: 1 }}
+            sx={{ flex: 1, my: 0 }}
           />
         </Box>
-        
-        <Box>
-          <Typography gutterBottom>Wall Thickness (mm)</Typography>
-          <Slider
-            value={wallThickness}
-            onChange={(_, value) => setWallThickness(value as number)}
-            min={0.8}
-            max={3}
-            step={0.1}
-            valueLabelDisplay="auto"
+      </Stack>
+      
+      {/* Export STEP FAB */}
+      <Box sx={{ 
+        position: 'fixed', 
+        bottom: 16, 
+        right: 16, 
+        zIndex: 1000 
+      }}>
+        <Tooltip title="Export 3D Model (STEP)">
+          <Fab
             color="primary"
-            sx={{ mb: 1 }}
-          />
-        </Box>
-        
-        <Typography variant="subtitle1" gutterBottom sx={{ mt: 1 }}>
-          Export Options
-        </Typography>
-        
-        <Stack direction="row" spacing={2}>
-          <Button 
-            variant="contained" 
+            aria-label="export-step"
             onClick={handleExportSTEP}
             disabled={isLoading || isStepLoading}
-            startIcon={<Box component="span" sx={{ fontWeight: 'bold' }}>STEP</Box>}
-            color="primary"
           >
-            Export 3D Model (STEP)
-          </Button>
-        </Stack>
-      </Stack>
+            <FileDownloadIcon />
+          </Fab>
+        </Tooltip>
+      </Box>
     </Box>
   );
 };
