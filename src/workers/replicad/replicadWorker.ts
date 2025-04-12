@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import * as Comlink from 'comlink';
+import { LRUCache } from 'lru-cache';
 import { ReplicadWorkerAPI, ReplicadFaces, ReplicadEdges } from './replicadWorkerApi';
 import { ObjectData } from '../../types';
 import { catmullToBezier } from '../../utils/spline';
@@ -12,6 +13,11 @@ let opencascade: any;
 
 // Initialization flag
 let isReplicadInitialized = false;
+
+// Create an LRU cache for model results
+const modelCache = new LRUCache<string, any>({
+  max: 10  // Cache last 10 models
+});
 
 // Singleton class for managing replicad and OpenCascade
 class ReplicadSingleton {
@@ -186,8 +192,6 @@ class ReplicadWorkerImpl implements ReplicadWorkerAPI {
     
     // Top size - use GRID_SIZE - TOLERANCE for the outer dimension
     const outerDim = GRID_SIZE - TOLERANCE; // 41.5mm
-    const middleDim = outerDim - 2.15; // 39.35mm - after 45-degree slope
-    const bottomDim = middleDim - 0.8; // 38.55mm - after second 45-degree slope
     
     // Calculate how many grid cells fit in the total area
     const numUnitsX = Math.round(width / GRID_SIZE);
@@ -270,6 +274,31 @@ class ReplicadWorkerImpl implements ReplicadWorkerAPI {
     return finalModel;
   }
 
+  /**
+   * Generate a cache key from the model parameters
+   */
+  private generateCacheKey(
+    outlines: ObjectData[],
+    totalHeight: number,
+    wallThickness: number,
+    baseHeight: number
+  ): string {
+    // Create a hash from outlines - similar to the hash function in replicadQueries.ts
+    const outlinesHash = outlines.map(outline => {
+      switch (outline.type) {
+        case 'roundedRect':
+          return `rect:${outline.id}:${outline.width}:${outline.height}:${outline.radius}:${outline.position.x}:${outline.position.y}:${outline.rotation}`;
+        case 'spline': {
+          const pointsHash = outline.points.map(p => `${p.x},${p.y}`).join(';');
+          return `spline:${outline.id}:${outline.position.x}:${outline.position.y}:${outline.rotation}:${pointsHash}`;
+        }
+      }
+    }).join('|');
+    
+    // Combine with other parameters to create a unique key
+    return `model:${outlinesHash}:${totalHeight}:${wallThickness}:${baseHeight}`;
+  }
+
   async generateModel(
     outlines: ObjectData[],
     totalHeight: number,
@@ -280,7 +309,22 @@ class ReplicadWorkerImpl implements ReplicadWorkerAPI {
       return null;
     }
     
-    const finalModel = await this.createModel(outlines, totalHeight, wallThickness, baseHeight);
+    // Generate cache key
+    const cacheKey = this.generateCacheKey(outlines, totalHeight, wallThickness, baseHeight);
+    
+    // Check if we have a cached model
+    let finalModel = modelCache.get(cacheKey);
+    
+    if (!finalModel) {
+      console.log('Model not found in cache, creating new model');
+      finalModel = await this.createModel(outlines, totalHeight, wallThickness, baseHeight);
+      
+      // Store in cache for future use
+      modelCache.set(cacheKey, finalModel);
+      console.log('Model cached with key:', cacheKey);
+    } else {
+      console.log('Using cached model with key:', cacheKey);
+    }
     
     // Generate mesh data for 3D rendering
     const faces = finalModel.mesh({ tolerance: 0.05, angularTolerance: 30 });
@@ -300,8 +344,23 @@ class ReplicadWorkerImpl implements ReplicadWorkerAPI {
     }
     
     try {
-      // Create the model on-demand for this export
-      const model = await this.createModel(outlines, totalHeight, wallThickness, baseHeight);
+      // Generate cache key
+      const cacheKey = this.generateCacheKey(outlines, totalHeight, wallThickness, baseHeight);
+      
+      // Check if we have a cached model
+      let model = modelCache.get(cacheKey);
+      
+      if (!model) {
+        console.log('Model not found in cache for STEP export, creating new model');
+        model = await this.createModel(outlines, totalHeight, wallThickness, baseHeight);
+        
+        // Store in cache for future use
+        modelCache.set(cacheKey, model);
+        console.log('Model cached with key:', cacheKey);
+      } else {
+        console.log('Using cached model for STEP export with key:', cacheKey);
+      }
+      
       return await model.blobSTEP();
     } catch (error) {
       console.error('Error generating STEP file:', error);
