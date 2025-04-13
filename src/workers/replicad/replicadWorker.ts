@@ -1,71 +1,65 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import * as Comlink from 'comlink';
-import { LRUCache } from 'lru-cache';
 import { ReplicadWorkerAPI, ReplicadFaces, ReplicadEdges } from './replicadWorkerApi';
 import { ObjectData } from '../../types';
 import { catmullToBezier } from '../../utils/spline';
 import { calculateMinimalGridArea, GRID_SIZE, TOLERANCE } from '../../utils/grid';
-
-// We'll use dynamic imports to load the modules
-let replicad: any;
-let opencascadeWasm: any;
-let opencascade: any;
+import * as replicad from 'replicad';
+import opencascade from 'replicad-opencascadejs/src/replicad_single.js';
+import opencascadeWasm from 'replicad-opencascadejs/src/replicad_single.wasm?url';
+import { memoize } from './memoize';
 
 // Initialization flag
 let isReplicadInitialized = false;
 
-// Create an LRU cache for model results
-const modelCache = new LRUCache<string, any>({
-  max: 10  // Cache last 10 models
-});
+// Promise for initialization
+let initializationPromise: Promise<void> | null = null;
 
-// Singleton class for managing replicad and OpenCascade
-class ReplicadSingleton {
-  static async loadModules() {
-    if (!replicad) {
-      console.log('Loading replicad module');
-      replicad = await import('replicad');
-    }
+// Function to initialize replicad with OpenCascade
+const initializeReplicad = async (): Promise<void> => {
+  if (isReplicadInitialized) return;
+  
+  if (!initializationPromise) {
+    console.log('Initializing replicad with OpenCascade');
     
-    if (!opencascade) {
-      console.log('Loading opencascade module');
-      opencascade = await import('replicad-opencascadejs/src/replicad_single.js');
-      opencascadeWasm = await import('replicad-opencascadejs/src/replicad_single.wasm?url');
-    }
-    
-    return { replicad, opencascade, opencascadeWasm };
+    initializationPromise = (async () => {
+      try {
+        console.log('Loading OpenCascade with WASM URL:', opencascadeWasm);
+        
+        // Initialize OpenCascade.js with the WASM file
+        // @ts-expect-error - TypeScript thinks opencascade takes no arguments, but it needs configuration
+        const OC = await opencascade({
+          locateFile: () => opencascadeWasm
+        });
+        
+        // Inject OpenCascade instance into replicad
+        replicad.setOC(OC);
+        
+        isReplicadInitialized = true;
+        console.log('Replicad initialized successfully with OpenCascade');
+      } catch (error) {
+        console.error('Failed to initialize replicad with OpenCascade:', error);
+        initializationPromise = null;
+        throw error;
+      }
+    })();
   }
   
-  static async initialize() {
-    if (isReplicadInitialized) return;
-    
-    try {
-      // Load the modules
-      const { replicad, opencascade, opencascadeWasm } = await this.loadModules();
-      
-      console.log('Loading OpenCascade with WASM URL:', opencascadeWasm.default);
-      
-      // Initialize OpenCascade.js with the WASM file
-      const OC = await opencascade.default({
-        locateFile: () => opencascadeWasm.default,
-      });
-      
-      // Inject OpenCascade instance into replicad
-      replicad.setOC(OC);
-      
-      isReplicadInitialized = true;
-      console.log('Replicad initialized successfully with OpenCascade');
-    } catch (error) {
-      console.error('Failed to initialize replicad with OpenCascade:', error);
-      throw error;
-    }
-  }
+  return initializationPromise;
 }
 
 class ReplicadWorkerImpl implements ReplicadWorkerAPI {
+  // The createBin method will be assigned in the constructor via memoization
+  
+  constructor() {
+    this.createBin = memoize(this.createBin_.bind(this));
+    this.createBaseUnit = memoize(this.createBaseUnit_.bind(this));
+    this.createBase = memoize(this.createBase_.bind(this));
+  }
+
   async initialize(): Promise<void> {
     try {
-      await ReplicadSingleton.initialize();
+      await initializeReplicad();
     } catch (error) {
       console.error('Failed to initialize worker:', error);
       throw new Error('Failed to initialize replicad: ' + String(error));
@@ -77,38 +71,21 @@ class ReplicadWorkerImpl implements ReplicadWorkerAPI {
   }
 
   /**
-   * Helper method to create a 3D model
+   * Creates and processes cutout shapes for the walls
    */
-  private async createModel(
+  private createWallsWithCutouts(
     outlines: ObjectData[],
-    totalHeight: number,
-    baseHeight: number = 4.75
-  ): Promise<any> {
-    // Make sure replicad is initialized
-    if (!isReplicadInitialized) {
-      await this.initialize();
-    }
-
-    console.log('Creating model from outlines:', outlines.length);
-    
-    // Calculate the minimal grid area to get the base rectangle size
-    const { min, max } = calculateMinimalGridArea(outlines);
-    console.log('Grid area:', { min, max });
-    
-    // Create rounded rectangle base at the center of the grid
+    baseRect: any,
+    min: { x: number, y: number },
+    max: { x: number, y: number }
+  ): any {
     const width = max.x - min.x;
     const height = max.y - min.y;
     
-    // Constants for the bin
-    const BIN_CORNER_RADIUS = 7.5 / 2; // Base corner radius in mm
-    const wallHeight = totalHeight - baseHeight - 1; // Calculate the wall height
+    // Start with the base rectangle as the wall shape
+    let wallsShape = baseRect;
     
-    // Draw the standard 41.5mm base with 7.5mm corner radius
-    const baseRect = replicad.drawRoundedRectangle(max.x - min.x, max.y - min.y, BIN_CORNER_RADIUS);
-    
-    // Now process each outline as a cutout for the walls
-    let wallsShape = baseRect; // The wall shape that will get cutouts
-    
+    // Process each outline as a cutout for the walls
     for (const obj of outlines) {
       let cutoutShape;
       
@@ -184,23 +161,22 @@ class ReplicadWorkerImpl implements ReplicadWorkerAPI {
 
       wallsShape = wallsShape.cut(cutoutShape);
     }
-
-    // Create a grid of individual base units
-    console.log('Creating grid of base units...');
-    let finalModel;
     
-    // Top size - use GRID_SIZE - TOLERANCE for the outer dimension
-    const outerDim = GRID_SIZE - TOLERANCE; // 41.5mm
-    
-    // Calculate how many grid cells fit in the total area
-    const numUnitsX = Math.round(width / GRID_SIZE);
-    const numUnitsY = Math.round(height / GRID_SIZE);
-    
-    console.log(`Creating grid of ${numUnitsX}x${numUnitsY} units`);
-    
+    return wallsShape;
+  }
+  
+  private createBaseUnit: (
+    baseHeight: number,
+    outerDim: number,
+    BIN_CORNER_RADIUS: number
+  ) => any;
+  
+  /**
+   * Creates a single standard base unit
+   */
+  private createBaseUnit_(baseHeight: number, outerDim: number, BIN_CORNER_RADIUS: number): any {
     // Create a single base unit with beveled profile
     // Create profiles for lofting
-    // Top profile at full size
     const topProfile = replicad.drawRoundedRectangle(outerDim, outerDim, BIN_CORNER_RADIUS);
     const middleProfile = topProfile.offset(-2.15/2);
     const bottomProfile = middleProfile.offset(-0.8/2);
@@ -212,28 +188,61 @@ class ReplicadWorkerImpl implements ReplicadWorkerAPI {
     const bottomHeight = 0; // Bottom of the base
     
     // Create sketches at different heights using the proper replicad API
-    // Using the Drawing objects directly for sketch placement
     const topSketch = topProfile.sketchOnPlane("XY", topHeight) as any;
     const middleSketch = middleProfile.sketchOnPlane("XY", middleHeight) as any;
     const flatSketch = middleProfile.sketchOnPlane("XY", flatHeight) as any;
     const bottomSketch = bottomProfile.sketchOnPlane("XY", bottomHeight) as any;
     
     // Create the base unit by lofting through the profiles
-    const baseUnit = topSketch.loftWith([middleSketch, flatSketch, bottomSketch], {ruled: true}) as any;
-        
-    // Create a 1mm thick bottom for the bin
+    return topSketch.loftWith([middleSketch, flatSketch, bottomSketch], {ruled: true}) as any;
+  }
+  
+  /**
+   * Creates a 1mm thick bottom for the bin
+   */
+  private createBottom(width: number, height: number, radius: number, baseHeight: number): any {
     console.log('Creating bin bottom...');
     const bottomThickness = 1.0; // 1mm thick bottom
+    
+    // Create the base rectangle
+    const baseRect = replicad.drawRoundedRectangle(width, height, radius);
     
     // Create the bottom as a simple extrusion of the base rectangle
     const binBottomSketch = baseRect.sketchOnPlane("XY", baseHeight);
     const bottomModel = binBottomSketch.extrude(bottomThickness) as any;
     console.log(`Created ${bottomThickness}mm thick bin bottom`);
     
-    // Clone and position units to create the complete base
-    let baseModel: any = bottomModel;
-
+    return bottomModel;
+  }
   
+  private createBase: (
+    width: number,
+    height: number,
+    radius: number,
+    baseHeight: number
+  ) => any;
+  /**
+   * Creates the gridded base structure with base units and bottom
+   */
+  private createBase_(width: number, height: number, radius: number, baseHeight: number): any {
+    // Top size - use GRID_SIZE - TOLERANCE for the outer dimension
+    const outerDim = GRID_SIZE - TOLERANCE; // 41.5mm
+    
+    // Create the bottom first
+    const bottomModel = this.createBottom(width, height, radius, baseHeight);
+    
+    // Create a single base unit
+    const baseUnit = this.createBaseUnit(baseHeight, outerDim, radius);
+    
+    // Calculate how many grid cells fit in the total area
+    const numUnitsX = Math.round(width / GRID_SIZE);
+    const numUnitsY = Math.round(height / GRID_SIZE);
+    
+    console.log(`Creating grid of ${numUnitsX}x${numUnitsY} units`);
+    
+    // Start with the bottom model
+    let baseModel: any = bottomModel;
+    
     // Calculate the starting position (centered grid)
     const startX = -width/2 + (outerDim)/2;
     const startY = -height/2 + (outerDim)/2;
@@ -257,20 +266,74 @@ class ReplicadWorkerImpl implements ReplicadWorkerAPI {
     }
     
     console.log(`Created grid of ${numUnitsX}x${numUnitsY} base units`);
+    return baseModel;
+  }
+  
+  private createBin: (
+    outlines: ObjectData[],
+    totalHeight: number,
+    baseHeight?: number
+  ) => any;
+
+  /**
+   * Creates a bin model with base units, bottom, and walls
+   */
+  private createBin_(
+    outlines: ObjectData[],
+    totalHeight: number,
+    baseHeight: number = 4.75
+  ): any {
+    // Calculate the minimal grid area to get the base rectangle size
+    const { min, max } = calculateMinimalGridArea(outlines);
+    console.log('Grid area:', { min, max });
     
-    // Create walls (with cutouts if any)
+    // Calculate dimensions
+    const width = max.x - min.x;
+    const height = max.y - min.y;
+    
+    // Constants for the bin
+    const BIN_CORNER_RADIUS = 7.5 / 2; // Base corner radius in mm
+    const wallHeight = totalHeight - baseHeight - 1; // Calculate the wall height
+    const bottomThickness = 1.0; // 1mm thick bottom
+    
+    // Create the base and bottom
+    const baseModel = this.createBase(width, height, BIN_CORNER_RADIUS, baseHeight);
+    
+    // Create walls with cutouts
+    const baseRect = replicad.drawRoundedRectangle(width, height, BIN_CORNER_RADIUS);
+    const wallsShape = this.createWallsWithCutouts(outlines, baseRect, min, max);
+    
+    // Create walls from the wall shape with cutouts
     console.log('Creating wall shape with cutouts...');
-    let wallsModel;
-    
     const wallsSketch = wallsShape.sketchOnPlane();
     // Position walls on top of the base and the bottom
-    wallsModel = wallsSketch.extrude(wallHeight).translate(0, 0, baseHeight + bottomThickness) as any;
+    const wallsModel = wallsSketch.extrude(wallHeight)
+      .translate(0, 0, baseHeight + bottomThickness) as any;
     console.log(`Created walls with height ${wallHeight}mm`);
     
-    finalModel = baseModel.fuse(wallsModel, { optimisation: "commonFace" });
+    // Combine base and walls
+    const finalModel = baseModel.fuse(wallsModel, { optimisation: "commonFace" });
     console.log('Successfully created final 3D model by combining base units, bottom, and walls with commonFace optimization');
     
     return finalModel;
+  }
+
+  /**
+   * Helper method to create a 3D model
+   */
+  private async createModel(
+    outlines: ObjectData[],
+    totalHeight: number,
+    baseHeight: number = 4.75
+  ): Promise<any> {
+    // Make sure replicad is initialized
+    if (!isReplicadInitialized) {
+      await initializeReplicad();
+    }
+
+    console.log('Creating model from outlines:', outlines.length);
+    
+    return this.createBin(outlines, totalHeight, baseHeight);
   }
 
   /**
@@ -305,23 +368,8 @@ class ReplicadWorkerImpl implements ReplicadWorkerAPI {
     if (outlines.length === 0) {
       return null;
     }
-    
-    // Generate cache key
-    const cacheKey = this.generateCacheKey(outlines, totalHeight, baseHeight);
-    
-    // Check if we have a cached model
-    let finalModel = modelCache.get(cacheKey);
-    
-    if (!finalModel) {
-      console.log('Model not found in cache, creating new model');
-      finalModel = await this.createModel(outlines, totalHeight, baseHeight);
-      
-      // Store in cache for future use
-      modelCache.set(cacheKey, finalModel);
-      console.log('Model cached with key:', cacheKey);
-    } else {
-      console.log('Using cached model with key:', cacheKey);
-    }
+
+    const finalModel = await this.createModel(outlines, totalHeight, baseHeight);
     
     // Generate mesh data for 3D rendering
     const faces = finalModel.mesh({ tolerance: 0.05, angularTolerance: 30 });
@@ -340,23 +388,7 @@ class ReplicadWorkerImpl implements ReplicadWorkerAPI {
     }
     
     try {
-      // Generate cache key
-      const cacheKey = this.generateCacheKey(outlines, totalHeight, baseHeight);
-      
-      // Check if we have a cached model
-      let model = modelCache.get(cacheKey);
-      
-      if (!model) {
-        console.log('Model not found in cache for STEP export, creating new model');
-        model = await this.createModel(outlines, totalHeight, baseHeight);
-        
-        // Store in cache for future use
-        modelCache.set(cacheKey, model);
-        console.log('Model cached with key:', cacheKey);
-      } else {
-        console.log('Using cached model for STEP export with key:', cacheKey);
-      }
-      
+      const model = await this.createModel(outlines, totalHeight, baseHeight);
       return await model.blobSTEP();
     } catch (error) {
       console.error('Error generating STEP file:', error);
