@@ -201,11 +201,12 @@ const App: React.FC = () => {
         </Toolbar>
       </AppBar>
       <Box sx={{ flex: 1, position: 'relative' }}>
-        {viewMode === '2d' ? (
+        <Box sx={{ display: viewMode === '2d' ? 'block' : 'none', height: '100%' }}>
           <MainCanvas />
-        ) : (
-          <ReplicadViewer width={window.innerWidth} height={window.innerHeight - 64} />
-        )}
+        </Box>
+        <Box sx={{ display: viewMode === '3d' ? 'block' : 'none', height: '100%' }}>
+          <ReplicadViewer width={window.innerWidth} height={window.innerHeight - 64} active={viewMode === '3d'} />
+        </Box>
       </Box>
       <Box sx={{ 
         position: 'fixed', 

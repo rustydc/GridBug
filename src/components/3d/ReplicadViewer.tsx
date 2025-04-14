@@ -9,11 +9,11 @@ import { useGenerateModel, useStepExport } from '../../workers/replicad/replicad
 interface ReplicadViewerProps {
   width: number;
   height: number;
+  active: boolean;
 }
 
-const ReplicadViewer: React.FC<ReplicadViewerProps> = ({ width, height }) => {
+const ReplicadViewer: React.FC<ReplicadViewerProps> = ({ width, height, active }) => {
   const outlines = useStore(state => state.outlines);
-  console.log('ReplicadViewer received outlines:', outlines?.length || 0);
   
   const [binHeight, setBinHeight] = useState<number>(20);
   const [tempBinHeight, setTempBinHeight] = useState<number>(20);
@@ -26,7 +26,7 @@ const ReplicadViewer: React.FC<ReplicadViewerProps> = ({ width, height }) => {
     isLoading: isModelGenerating,
     error: modelError,
     isFetching: isModelFetching,
-  } = useGenerateModel(outlines, binHeight, 4.75, !isDragging);
+  } = useGenerateModel(outlines, binHeight, 4.75, active && !isDragging);
   
   // Use the query for STEP export, but only enable it when needed
   const {
