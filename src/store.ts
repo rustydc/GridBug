@@ -49,6 +49,7 @@ interface State {
   selectOutline: (id: string | null, multiSelect?: boolean) => void;
   clearSelection: () => void;
   deleteOutline: (id: string) => void;
+  reorderOutlines: (sourceIndex: number, destinationIndex: number) => void;
   updateMultipleOutlines: (updates: { id: string; updates: Partial<Outline> }[]) => void;
 }
 
@@ -166,6 +167,7 @@ export const useStore = create<State>()(
 
       addOutline: (points, bitmap, position = {x: 0, y: 0}) => set(
         (state) => {
+          const splineIndex = state.outlines.filter(o => o.type === 'spline').length + 1;
           const newState = {
             outlines: [...state.outlines, {
               id: Math.random().toString(36).substr(2, 9),
@@ -175,6 +177,7 @@ export const useStore = create<State>()(
               rotation: 0,
               selected: false,
               editMode: false,
+              name: `Spline ${splineIndex}`,
               color: getNextColor(state.outlines.length),
               bounds: calculateSplineBounds(points[0]),
               bitmap
@@ -188,6 +191,7 @@ export const useStore = create<State>()(
       
       addRoundedRect: (width, height, radius, position = {x: 0, y: 0}) => set(
         (state) => {
+          const rectIndex = state.outlines.filter(o => o.type === 'roundedRect').length + 1;
           const newState = {
             outlines: [...state.outlines, {
               id: Math.random().toString(36).substr(2, 9),
@@ -199,6 +203,7 @@ export const useStore = create<State>()(
               rotation: 0,
               selected: false,
               editMode: false,
+              name: `Rectangle ${rectIndex}`,
               color: getNextColor(state.outlines.length),
               bounds: calculateRectBounds(width, height)
             } as RoundedRectOutline]
@@ -214,9 +219,12 @@ export const useStore = create<State>()(
           outlines: state.outlines.map(outline => {
             if (outline.id !== id) return outline;
             
+            // Process updates with formatting rules
+            const processedUpdates = { ...updates };
+            
             if (outline.type === 'spline') {
               // Handle spline outline updates
-              const splineUpdates = updates as Partial<SplineOutline>;
+              const splineUpdates = processedUpdates as Partial<SplineOutline>;
               const updatedOutline = { ...outline, ...splineUpdates };
               
               // Recalculate bounds if points changed
@@ -228,7 +236,13 @@ export const useStore = create<State>()(
             } else {
               // Handle rounded rect outline updates
               const rectOutline = outline as RoundedRectOutline;
-              const rectUpdates = updates as Partial<RoundedRectOutline>;
+              const rectUpdates = processedUpdates as Partial<RoundedRectOutline>;
+              
+              // Round radius to nearest 0.1mm if present
+              if (rectUpdates.radius !== undefined) {
+                rectUpdates.radius = Math.round(rectUpdates.radius * 10) / 10;
+              }
+              
               const updatedOutline = { ...rectOutline, ...rectUpdates };
               
               // Recalculate bounds if dimensions changed
@@ -252,10 +266,18 @@ export const useStore = create<State>()(
             const update = updates.find(u => u.id === outline.id);
             if (!update) return outline;
             
+            // Process updates with formatting rules
+            const processedUpdates = { ...update.updates };
+            
+            // Round rotation to nearest 0.5 degree if present
+            if (processedUpdates.rotation !== undefined) {
+              processedUpdates.rotation = Math.round(processedUpdates.rotation * 2) / 2;
+            }
+            
             // Type-safe updates based on outline type
             if (outline.type === 'spline') {
               const splineOutline = outline as SplineOutline;
-              const splineUpdates = update.updates as Partial<SplineOutline>;
+              const splineUpdates = processedUpdates as Partial<SplineOutline>;
               const updatedOutline = { ...splineOutline, ...splineUpdates };
               
               // Recalculate bounds if points changed
@@ -266,7 +288,13 @@ export const useStore = create<State>()(
               return updatedOutline;
             } else {
               const rectOutline = outline as RoundedRectOutline;
-              const rectUpdates = update.updates as Partial<RoundedRectOutline>;
+              const rectUpdates = processedUpdates as Partial<RoundedRectOutline>;
+              
+              // Round radius to nearest 0.1mm if present
+              if (rectUpdates.radius !== undefined) {
+                rectUpdates.radius = Math.round(rectUpdates.radius * 10) / 10;
+              }
+              
               const updatedOutline = { ...rectOutline, ...rectUpdates };
               
               // Recalculate bounds if dimensions changed
@@ -316,6 +344,20 @@ export const useStore = create<State>()(
         }),
         false,
         'deleteOutline'
+      ),
+      
+      reorderOutlines: (sourceIndex: number, destinationIndex: number) => set(
+        (state) => {
+          const result = [...state.outlines];
+          const [removed] = result.splice(sourceIndex, 1);
+          result.splice(destinationIndex, 0, removed);
+          
+          return {
+            outlines: result
+          };
+        },
+        false,
+        'reorderOutlines'
       )
     }), {
       limit: 50,

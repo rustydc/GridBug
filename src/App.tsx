@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { AppBar, Toolbar, Typography, Box, Fab, Modal, Tooltip, Link, Tab, Tabs } from '@mui/material';
+import { AppBar, Toolbar, Typography, Box, Fab, Modal, Tooltip, Link, Tab, Tabs, IconButton } from '@mui/material';
+import MenuIcon from '@mui/icons-material/Menu';
 import CropSquareRoundedIcon from '@mui/icons-material/CropSquareRounded';
 import GestureIcon from '@mui/icons-material/Gesture';
 import FileUploadIcon from '@mui/icons-material/FileUpload';
@@ -7,6 +8,7 @@ import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import ImageIcon from '@mui/icons-material/Image';
 import GitHubIcon from '@mui/icons-material/GitHub';
 import MainCanvas from './components/2d/MainCanvas';
+import PropertiesPanel from './components/2d/PropertiesPanel';
 import ImageOutliner from './components/tracer/ImageOutliner';
 import ReplicadViewer from './components/3d/ReplicadViewer';
 import { useStore } from './store';
@@ -23,11 +25,13 @@ const App: React.FC = () => {
     addRoundedRect,
     deleteOutline, 
     outlines, 
-    centerView
+    centerView,
+    updateOutline
   } = useStore();
   const { undo, redo } = useStore.temporal.getState();
   const [imageData, setImageData] = useState<ImageInfo | null>(null);
   const [viewMode, setViewMode] = useState<'2d' | '3d'>('2d');
+  const [showProperties, setShowProperties] = useState(true);
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -119,7 +123,14 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Delete' || e.key === 'Backspace') {
+      // Skip keyboard shortcuts if focus is in an input element
+      const activeElement = document.activeElement;
+      const isInputFocused = activeElement instanceof HTMLInputElement || 
+                             activeElement instanceof HTMLTextAreaElement || 
+                             activeElement?.hasAttribute('contenteditable');
+      
+      // Only handle Delete/Backspace when not in an input field
+      if ((e.key === 'Delete' || e.key === 'Backspace') && !isInputFocused) {
         const selected = outlines.find(o => o.selected);
         if (selected) {
           deleteOutline(selected.id);
@@ -132,11 +143,11 @@ const App: React.FC = () => {
         } else {
           undo();
         }
-      } else if (e.key === 'd' && e.ctrlKey) {
+      } else if (e.key === 'd' && e.ctrlKey && !isInputFocused) {
         // Duplicate the selected outline with a new color
         const selected = outlines.find(o => o.selected);
         if (selected) {
-          if (selected.type === 'spline') {
+          if (selected.type === 'spline') {            
             // Create a new outline with the same points but slightly offset position
             const newOutline = {
               ...selected,
@@ -145,6 +156,7 @@ const App: React.FC = () => {
                 x: selected.position.x + 10, 
                 y: selected.position.y + 10 
               },
+              name: `${selected.name} (copy)`,
               selected: false,
               color: getNextColor(outlines.length) // Generate a new color
             };
@@ -157,6 +169,14 @@ const App: React.FC = () => {
           } else if (selected.type === 'roundedRect') {
             // For rounded rectangles, create a new one with the same properties
             const rectOutline = selected;
+            
+            // First create a temporary object to hold the custom name
+            const tempRect = {
+              ...rectOutline,
+              name: `${rectOutline.name} (copy)`
+            };
+            
+            // Then use the standard function for creation
             addRoundedRect(
               rectOutline.width,
               rectOutline.height,
@@ -166,6 +186,13 @@ const App: React.FC = () => {
                 y: rectOutline.position.y + 10 
               }
             );
+            
+            // Get the id of the newly created rectangle (last in the outlines array)
+            const newRectId = outlines[outlines.length - 1]?.id;
+            if (newRectId) {
+              // Update the name to the copy name
+              updateOutline(newRectId, { name: tempRect.name });
+            }
           }
         }
       }
@@ -173,13 +200,25 @@ const App: React.FC = () => {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [outlines, undo, redo, deleteOutline, centerView, addOutline, addRoundedRect]);
+  }, [outlines, undo, redo, deleteOutline, centerView, addOutline, addRoundedRect, updateOutline]);
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
       <AppBar position="static">
         <Toolbar sx={{ display: 'flex', justifyContent: 'space-between' }}>
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            {viewMode === '2d' && (
+              <Tooltip title={showProperties ? "Hide properties" : "Show properties"}>
+                <IconButton 
+                  color="inherit" 
+                  edge="start" 
+                  onClick={() => setShowProperties(!showProperties)}
+                  sx={{ mr: 1 }}
+                >
+                  <MenuIcon />
+                </IconButton>
+              </Tooltip>
+            )}
             <Typography variant="h6" sx={{ mr: 3 }}>GridBug</Typography>
             <Tabs 
               value={viewMode} 
@@ -201,8 +240,11 @@ const App: React.FC = () => {
         </Toolbar>
       </AppBar>
       <Box sx={{ flex: 1, position: 'relative' }}>
-        <Box sx={{ display: viewMode === '2d' ? 'block' : 'none', height: '100%' }}>
-          <MainCanvas />
+        <Box sx={{ display: viewMode === '2d' ? 'flex' : 'none', height: '100%' }}>
+          {showProperties && <PropertiesPanel />}
+          <Box sx={{ flex: 1, height: '100%' }}>
+            <MainCanvas />
+          </Box>
         </Box>
         <Box sx={{ display: viewMode === '3d' ? 'block' : 'none', height: '100%' }}>
           <ReplicadViewer width={window.innerWidth} height={window.innerHeight - 64} active={viewMode === '3d'} />

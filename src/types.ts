@@ -12,6 +12,7 @@ export interface BaseOutline {
   selected: boolean;
   editMode: boolean;
   color: string;  // hex color
+  name: string;   // Display name
   bounds: Bounds;
   bitmap?: {
     url: string;

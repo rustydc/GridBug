@@ -100,8 +100,8 @@ const RoundedRectOutline: React.FC<RoundedRectOutlineType> = ({
       
       // Calculate new width and height based on local point position
       // We're using absolute values to prevent negative dimensions
-      const newWidth = Math.max(10, Math.abs(localPoint.x) * 2);
-      const newHeight = Math.max(10, Math.abs(localPoint.y) * 2);
+      const newWidth = Math.max(1, Math.abs(localPoint.x) * 2);
+      const newHeight = Math.max(1, Math.abs(localPoint.y) * 2);
       
       // Radius cannot be larger than half the smallest dimension
       const maxRadius = Math.min(newWidth, newHeight) / 2;

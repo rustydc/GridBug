@@ -191,8 +191,8 @@ const RectTransformHandles: React.FC<Props> = ({ bounds, position, rotation, out
     }
 
     // Calculate new width and height
-    const newWidth = Math.max(10, newBounds.maxX - newBounds.minX);
-    const newHeight = Math.max(10, newBounds.maxY - newBounds.minY);
+    const newWidth = Math.max(1, newBounds.maxX - newBounds.minX);
+    const newHeight = Math.max(1, newBounds.maxY - newBounds.minY);
 
     // Use the outlineId passed in props to update the correct outline
     if (outlineId) {

@@ -14,7 +14,7 @@ export const snapToGrid = (point: Point): Point => {
 
 export const calculateMinimalGridArea = (outlines: Outline[]): { min: Point; max: Point } => {
   if (outlines.length === 0) {
-    return { min: { x: 0, y: 0 }, max: { x: GRID_SIZE, y: GRID_SIZE } };
+    return { min: { x: 0, y: 0 }, max: { x: GRID_SIZE - TOLERANCE, y: GRID_SIZE - TOLERANCE } };
   }
 
   // For each outline, get the bounds in canvas space
