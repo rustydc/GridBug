@@ -24,16 +24,16 @@ export default function ThreeContext({ children, width, height }: ThreeContextPr
         style={{
           width: width,
           height: height,
-          backgroundColor: "#f5f5f5",
+          backgroundColor: "#fff",
         }}
         dpr={dpr}
         frameloop="demand"
         camera={{ position: [50, 70, 100], fov: 50 }}
       >
         <OrbitControls makeDefault enableDamping dampingFactor={0.2} />
-        <ambientLight intensity={0.5} />
-        <directionalLight position={[100, 100, 100]} intensity={0.8} />
-        <directionalLight position={[-100, 50, -100]} intensity={0.4} />
+        <ambientLight intensity={1.4} />
+        <directionalLight position={[100, 100, 100]} intensity={1.2} />
+        <directionalLight position={[-100, 50, -100]} intensity={0.9} />
         {children}
       </Canvas>
     </Suspense>

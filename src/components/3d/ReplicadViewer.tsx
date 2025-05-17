@@ -98,7 +98,7 @@ const ReplicadViewer: React.FC<ReplicadViewerProps> = ({ width, height, active }
           height: viewHeight,
           position: 'relative',
           overflow: 'hidden',
-          backgroundColor: '#f7f7f7',
+          backgroundColor: '#f9f9f9',
         }}
       >
         {/* Three.js Canvas managed by react-three-fiber */}
