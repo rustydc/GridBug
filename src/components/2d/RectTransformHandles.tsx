@@ -10,7 +10,7 @@ interface Props {
 }
 
 const RectTransformHandles: React.FC<Props> = ({ bounds, position, rotation, outlineId }) => {
-  const { viewState, updateOutline } = useStore();
+  const { viewState, updateOutline, outlines } = useStore();
   const svgRef = useRef<SVGElement | null>(null);
   const dragRef = useRef<{
     startX: number;
@@ -84,6 +84,17 @@ const RectTransformHandles: React.FC<Props> = ({ bounds, position, rotation, out
     pt.y = e.clientY;
     const svgP = pt.matrixTransform(svg.getScreenCTM()?.inverse());
 
+    // Get the outline and its corner radius
+    const outline = outlines.find(o => o.id === outlineId);
+    if (!outline || outline.type !== 'roundedRect') return;
+    
+    const radius = outline.radius;
+    const minSize = radius * 2; // Minimum size is twice the corner radius
+    
+    // Get the starting width and height
+    const startWidth = dragRef.current.startBounds.maxX - dragRef.current.startBounds.minX;
+    const startHeight = dragRef.current.startBounds.maxY - dragRef.current.startBounds.minY;
+
     // Convert the mouse movement to the rotated coordinate system
     // First, calculate raw movement in screen space
     const rawDx = svgP.x - dragRef.current.startX;
@@ -95,104 +106,97 @@ const RectTransformHandles: React.FC<Props> = ({ bounds, position, rotation, out
     const sin = Math.sin(rad);
     
     // Apply rotation transformation to the delta
-    const dx = rawDx * cos - rawDy * sin;
-    const dy = rawDx * sin + rawDy * cos;
+    let dx = rawDx * cos - rawDy * sin;
+    let dy = rawDx * sin + rawDy * cos;
 
     // Calculate new position, width, and height based on which handle is being dragged
     let newBounds = { ...dragRef.current.startBounds };
     let newPosition = { ...dragRef.current.startPosition };
     const isAltPressed = e.altKey;
+    const handlePos = dragRef.current.handlePosition;
     
-    // If alt is held, adjust symmetrically from center
-    if (isAltPressed) {
-      switch (dragRef.current.handlePosition) {
-        case 'top':
-          newBounds.minY = dragRef.current.startBounds.minY + dy;
-          newBounds.maxY = dragRef.current.startBounds.maxY - dy;
-          break;
-        case 'right':
-          newBounds.minX = dragRef.current.startBounds.minX - dx;
-          newBounds.maxX = dragRef.current.startBounds.maxX + dx;
-          break;
-        case 'bottom':
-          newBounds.minY = dragRef.current.startBounds.minY - dy;
-          newBounds.maxY = dragRef.current.startBounds.maxY + dy;
-          break;
-        case 'left':
-          newBounds.minX = dragRef.current.startBounds.minX + dx;
-          newBounds.maxX = dragRef.current.startBounds.maxX - dx;
-          break;
-        case 'topLeft':
-          newBounds.minX = dragRef.current.startBounds.minX + dx;
-          newBounds.maxX = dragRef.current.startBounds.maxX - dx;
-          newBounds.minY = dragRef.current.startBounds.minY + dy;
-          newBounds.maxY = dragRef.current.startBounds.maxY - dy;
-          break;
-        case 'topRight':
-          newBounds.minX = dragRef.current.startBounds.minX - dx;
-          newBounds.maxX = dragRef.current.startBounds.maxX + dx;
-          newBounds.minY = dragRef.current.startBounds.minY + dy;
-          newBounds.maxY = dragRef.current.startBounds.maxY - dy;
-          break;
-        case 'bottomRight':
-          newBounds.minX = dragRef.current.startBounds.minX - dx;
-          newBounds.maxX = dragRef.current.startBounds.maxX + dx;
-          newBounds.minY = dragRef.current.startBounds.minY - dy;
-          newBounds.maxY = dragRef.current.startBounds.maxY + dy;
-          break;
-        case 'bottomLeft':
-          newBounds.minX = dragRef.current.startBounds.minX + dx;
-          newBounds.maxX = dragRef.current.startBounds.maxX - dx;
-          newBounds.minY = dragRef.current.startBounds.minY - dy;
-          newBounds.maxY = dragRef.current.startBounds.maxY + dy;
-          break;
+    // Parse handle position to determine which sides we're adjusting
+    const adjustingLeft = handlePos.includes('left');
+    const adjustingRight = handlePos.includes('right');
+    const adjustingTop = handlePos.includes('top');
+    const adjustingBottom = handlePos.includes('bottom');
+    
+    // Process X-axis changes
+    if (adjustingLeft) {
+      // For left side, we need to clamp dx to ensure width doesn't go below minSize
+      const maxLeftDx = startWidth - minSize;
+      dx = Math.min(dx, maxLeftDx);
+      
+      if (isAltPressed) {
+        // If alt is pressed, adjust both sides symmetrically
+        newBounds.minX = dragRef.current.startBounds.minX + dx;
+        newBounds.maxX = dragRef.current.startBounds.maxX - dx;
+      } else {
+        newBounds.minX = dragRef.current.startBounds.minX + dx;
       }
-    } else {
-      // Move just the handle that was dragged
-      switch (dragRef.current.handlePosition) {
-        case 'top':
-          newBounds.minY = dragRef.current.startBounds.minY + dy;
-          // Calculate position adjustment accounting for rotation
-          newPosition = calculatePositionAdjustment(dx, dy, 0, dy/2, rotation, dragRef.current.startPosition);
-          break;
-        case 'right':
-          newBounds.maxX = dragRef.current.startBounds.maxX + dx;
-          newPosition = calculatePositionAdjustment(dx, dy, dx/2, 0, rotation, dragRef.current.startPosition);
-          break;
-        case 'bottom':
-          newBounds.maxY = dragRef.current.startBounds.maxY + dy;
-          newPosition = calculatePositionAdjustment(dx, dy, 0, dy/2, rotation, dragRef.current.startPosition);
-          break;
-        case 'left':
-          newBounds.minX = dragRef.current.startBounds.minX + dx;
-          newPosition = calculatePositionAdjustment(dx, dy, dx/2, 0, rotation, dragRef.current.startPosition);
-          break;
-        case 'topLeft':
-          newBounds.minX = dragRef.current.startBounds.minX + dx;
-          newBounds.minY = dragRef.current.startBounds.minY + dy;
-          newPosition = calculatePositionAdjustment(dx, dy, dx/2, dy/2, rotation, dragRef.current.startPosition);
-          break;
-        case 'topRight':
-          newBounds.maxX = dragRef.current.startBounds.maxX + dx;
-          newBounds.minY = dragRef.current.startBounds.minY + dy;
-          newPosition = calculatePositionAdjustment(dx, dy, dx/2, dy/2, rotation, dragRef.current.startPosition);
-          break;
-        case 'bottomRight':
-          newBounds.maxX = dragRef.current.startBounds.maxX + dx;
-          newBounds.maxY = dragRef.current.startBounds.maxY + dy;
-          newPosition = calculatePositionAdjustment(dx, dy, dx/2, dy/2, rotation, dragRef.current.startPosition);
-          break;
-        case 'bottomLeft':
-          newBounds.minX = dragRef.current.startBounds.minX + dx;
-          newBounds.maxY = dragRef.current.startBounds.maxY + dy;
-          newPosition = calculatePositionAdjustment(dx, dy, dx/2, dy/2, rotation, dragRef.current.startPosition);
-          break;
+    } else if (adjustingRight) {
+      // For right side, we need to clamp dx to ensure width doesn't go below minSize
+      const minRightDx = minSize - startWidth;
+      dx = Math.max(dx, minRightDx);
+      
+      if (isAltPressed) {
+        // If alt is pressed, adjust both sides symmetrically
+        newBounds.minX = dragRef.current.startBounds.minX - dx;
+        newBounds.maxX = dragRef.current.startBounds.maxX + dx;
+      } else {
+        newBounds.maxX = dragRef.current.startBounds.maxX + dx;
+      }
+    }
+    
+    // Process Y-axis changes
+    if (adjustingTop) {
+      // For top side, we need to clamp dy to ensure height doesn't go below minSize
+      const maxTopDy = startHeight - minSize;
+      dy = Math.min(dy, maxTopDy);
+      
+      if (isAltPressed) {
+        // If alt is pressed, adjust both sides symmetrically
+        newBounds.minY = dragRef.current.startBounds.minY + dy;
+        newBounds.maxY = dragRef.current.startBounds.maxY - dy;
+      } else {
+        newBounds.minY = dragRef.current.startBounds.minY + dy;
+      }
+    } else if (adjustingBottom) {
+      // For bottom side, we need to clamp dy to ensure height doesn't go below minSize
+      const minBottomDy = minSize - startHeight;
+      dy = Math.max(dy, minBottomDy);
+      
+      if (isAltPressed) {
+        // If alt is pressed, adjust both sides symmetrically
+        newBounds.minY = dragRef.current.startBounds.minY - dy;
+        newBounds.maxY = dragRef.current.startBounds.maxY + dy;
+      } else {
+        newBounds.maxY = dragRef.current.startBounds.maxY + dy;
+      }
+    }
+    
+    // Calculate position adjustment for non-alt resize
+    if (!isAltPressed) {
+      let offsetX = 0;
+      let offsetY = 0;
+      
+      // Calculate X offset for position
+      if (adjustingLeft) offsetX = dx/2;
+      else if (adjustingRight) offsetX = dx/2;
+      
+      // Calculate Y offset for position
+      if (adjustingTop) offsetY = dy/2;
+      else if (adjustingBottom) offsetY = dy/2;
+      
+      // Only adjust position if there's some kind of resize happening
+      if (offsetX !== 0 || offsetY !== 0) {
+        newPosition = calculatePositionAdjustment(dx, dy, offsetX, offsetY, rotation, dragRef.current.startPosition);
       }
     }
 
     // Calculate new width and height
-    const newWidth = Math.max(1, newBounds.maxX - newBounds.minX);
-    const newHeight = Math.max(1, newBounds.maxY - newBounds.minY);
+    const newWidth = Math.max(minSize, newBounds.maxX - newBounds.minX);
+    const newHeight = Math.max(minSize, newBounds.maxY - newBounds.minY);
 
     // Use the outlineId passed in props to update the correct outline
     if (outlineId) {
@@ -243,11 +247,11 @@ const RectTransformHandles: React.FC<Props> = ({ bounds, position, rotation, out
       case 'left':
       case 'right':
         return 'ew-resize';
-      case 'topLeft':
-      case 'bottomRight':
+      case 'top-left':
+      case 'bottom-right':
         return 'nwse-resize';
-      case 'topRight':
-      case 'bottomLeft':
+      case 'top-right':
+      case 'bottom-left':
         return 'nesw-resize';
       default:
         return 'move';
@@ -275,8 +279,8 @@ const RectTransformHandles: React.FC<Props> = ({ bounds, position, rotation, out
         width={handleSize}
         height={handleSize}
         fill="#2196f3"
-        cursor={getCursor('topLeft')}
-        onMouseDown={(e) => handleMouseDown(e, 'topLeft')}
+        cursor={getCursor('top-left')}
+        onMouseDown={(e) => handleMouseDown(e, 'top-left')}
       />
       
       {/* Top */}
@@ -297,8 +301,8 @@ const RectTransformHandles: React.FC<Props> = ({ bounds, position, rotation, out
         width={handleSize}
         height={handleSize}
         fill="#2196f3"
-        cursor={getCursor('topRight')}
-        onMouseDown={(e) => handleMouseDown(e, 'topRight')}
+        cursor={getCursor('top-right')}
+        onMouseDown={(e) => handleMouseDown(e, 'top-right')}
       />
       
       {/* Right */}
@@ -319,8 +323,8 @@ const RectTransformHandles: React.FC<Props> = ({ bounds, position, rotation, out
         width={handleSize}
         height={handleSize}
         fill="#2196f3"
-        cursor={getCursor('bottomRight')}
-        onMouseDown={(e) => handleMouseDown(e, 'bottomRight')}
+        cursor={getCursor('bottom-right')}
+        onMouseDown={(e) => handleMouseDown(e, 'bottom-right')}
       />
       
       {/* Bottom */}
@@ -341,8 +345,8 @@ const RectTransformHandles: React.FC<Props> = ({ bounds, position, rotation, out
         width={handleSize}
         height={handleSize}
         fill="#2196f3"
-        cursor={getCursor('bottomLeft')}
-        onMouseDown={(e) => handleMouseDown(e, 'bottomLeft')}
+        cursor={getCursor('bottom-left')}
+        onMouseDown={(e) => handleMouseDown(e, 'bottom-left')}
       />
       
       {/* Left */}
