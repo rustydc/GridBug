@@ -147,8 +147,8 @@ const MaskOutline: React.FC<Props> = ({ image, mmPerPixel, onConfirmOutline, onC
   const [status, setStatus] = useState<string>('');
   const [maskUrl, setMaskUrl] = useState<string | null>(null);
   const [contours, setContours] = useState<Point[][]>([]);  // Changed from svgPaths
-  const [simplification, setSimplification] = useState(0);
-  const [lineThicknessMM, setLineThicknessMM] = useState(1.0); // Default padding in mm
+  const [simplification, setSimplification] = useState(45);  // Default simplification set to 45mm
+  const [lineThicknessMM, setLineThicknessMM] = useState(2.0); // Default padding set to 2mm
   
   // Convert mm to pixels and double for padding since line thickness of 5mm only pads by 2.5mm
   // Using useCallback to ensure the function is stable and can be called from different effects
