@@ -75,17 +75,15 @@ export default React.memo(function ReplicadMesh({ faces, edges }: ReplicadMeshPr
     <group>
       <mesh geometry={body.current}>
         {/* the offsets are here to avoid z fighting between the mesh and the lines */}
-        <meshStandardMaterial
+        <meshLambertMaterial
           color="#fff"
-          metalness={0.2}
-          roughness={0.45}
           polygonOffset
           polygonOffsetFactor={2.0}
           polygonOffsetUnits={1.0}
         />
       </mesh>
       <lineSegments geometry={lines.current}>
-        <lineBasicMaterial color="#444" opacity={0.7} transparent />
+        <lineBasicMaterial color="#888" opacity={0.7} transparent />
       </lineSegments>
     </group>
   );

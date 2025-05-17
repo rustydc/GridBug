@@ -32,7 +32,7 @@ export default function ThreeContext({ children, width, height }: ThreeContextPr
       >
         <OrbitControls makeDefault enableDamping dampingFactor={0.2} />
         <ambientLight intensity={1.4} />
-        <directionalLight position={[100, 100, 100]} intensity={1.2} />
+        <directionalLight position={[100, 100, 100]} intensity={1.5} />
         <directionalLight position={[-100, 50, -100]} intensity={0.9} />
         {children}
       </Canvas>
