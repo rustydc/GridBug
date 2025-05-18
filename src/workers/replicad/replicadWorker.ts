@@ -77,15 +77,17 @@ class ReplicadWorkerImpl implements ReplicadWorkerAPI {
     outlines: ObjectData[],
     baseRect: any,
     min: { x: number, y: number },
-    max: { x: number, y: number }
+    max: { x: number, y: number },
+    wallHeight: number
   ): any {
     const width = max.x - min.x;
     const height = max.y - min.y;
     
-    // Start with the base rectangle as the wall shape
-    let wallsShape = baseRect;
+    // Start with the base rectangle extrusion as the wall shape
+    const wallsSketch = baseRect.sketchOnPlane();
+    let wallsModel = wallsSketch.extrude(wallHeight) as any;
     
-    // Process each outline as a cutout for the walls
+    // Process each outline as an individual extrusion to subtract
     for (const obj of outlines) {
       let cutoutShape;
       
@@ -159,10 +161,15 @@ class ReplicadWorkerImpl implements ReplicadWorkerAPI {
         throw new Error('Cutout shape is undefined');
       }
 
-      wallsShape = wallsShape.cut(cutoutShape);
+      // Extrude the cutout shape and subtract from the walls
+      const cutoutSketch = cutoutShape.sketchOnPlane();
+      const cutoutExtrusion = cutoutSketch.extrude(wallHeight) as any;
+      
+      // Subtract the extrusion from the walls
+      wallsModel = wallsModel.cut(cutoutExtrusion);
     }
     
-    return wallsShape;
+    return wallsModel;
   }
   
   private createBaseUnit: (
@@ -301,13 +308,10 @@ class ReplicadWorkerImpl implements ReplicadWorkerAPI {
     
     // Create walls with cutouts
     const baseRect = replicad.drawRoundedRectangle(width, height, BIN_CORNER_RADIUS);
-    const wallsShape = this.createWallsWithCutouts(outlines, baseRect, min, max);
     
-    // Create walls from the wall shape with cutouts
-    console.log('Creating wall shape with cutouts...');
-    const wallsSketch = wallsShape.sketchOnPlane();
-    // Position walls on top of the base and the bottom
-    const wallsModel = wallsSketch.extrude(wallHeight)
+    // Create walls with cutouts directly as a 3D model
+    console.log('Creating walls with cutouts...');
+    const wallsModel = this.createWallsWithCutouts(outlines, baseRect, min, max, wallHeight)
       .translate(0, 0, baseHeight + bottomThickness) as any;
     console.log(`Created walls with height ${wallHeight}mm`);
     
