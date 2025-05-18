@@ -55,6 +55,7 @@ class ReplicadWorkerImpl implements ReplicadWorkerAPI {
     this.createBin = memoize(this.createBin_.bind(this));
     this.createBaseUnit = memoize(this.createBaseUnit_.bind(this));
     this.createBase = memoize(this.createBase_.bind(this));
+    this.createCutoutExtrusion = memoize(this.createCutoutExtrusion_.bind(this));
   }
 
   async initialize(): Promise<void> {
@@ -68,6 +69,108 @@ class ReplicadWorkerImpl implements ReplicadWorkerAPI {
 
   async isReady(): Promise<boolean> {
     return isReplicadInitialized;
+  }
+
+  /**
+   * Creates a cutout extrusion for a specific outline
+   */
+  private createCutoutExtrusion: (
+    obj: ObjectData,
+    min: { x: number, y: number },
+    max: { x: number, y: number },
+    wallHeight: number
+  ) => any;
+
+  /**
+   * Creates a cutout extrusion for a specific outline
+   */
+  private createCutoutExtrusion_(
+    obj: ObjectData,
+    min: { x: number, y: number },
+    max: { x: number, y: number },
+    wallHeight: number
+  ): any {
+    const width = max.x - min.x;
+    const height = max.y - min.y;
+    let cutoutShape;
+    
+    if (obj.type === 'roundedRect') {
+      // Create a rounded rectangle at the correct position
+      // Need to adjust position relative to the grid min
+      // NOTE: We negate the X coordinate to correct the left/right flipping in 3D view
+      const rectX = -1 * (obj.position.x - min.x - width/2);
+      const rectY = obj.position.y - min.y - height/2;
+      
+      // First create the basic shape
+      let rectShape = replicad.drawRoundedRectangle(
+        obj.width, 
+        obj.height,
+        obj.radius
+      );
+      
+      rectShape = rectShape.rotate(-obj.rotation, [0, 0]);
+      cutoutShape = rectShape.translate(rectX, rectY);
+    } else if (obj.type === 'spline') {
+      // Create a proper spline path using bezier curves
+      const splinePoints = obj.points;
+      
+      // Adjust position relative to the grid min
+      // NOTE: We negate the X coordinate to correct the left/right flipping in 3D view
+      const splineX = -1 * (obj.position.x - min.x - width/2);
+      const splineY = obj.position.y - min.y - height/2;
+            
+      // Create a closed loop by creating an array of:
+      // [last point, all points, first point, second point]
+      const allPoints = [
+        splinePoints[splinePoints.length - 1],
+        ...splinePoints,
+        splinePoints[0],
+        splinePoints[1]
+      ];
+      
+      // Start with the first point - mirror the X coordinate
+      const startPoint = splinePoints[0];
+      
+      // Create a sketch starting with the first point (with mirrored X)
+      let sketcher = replicad.draw([-startPoint.x, startPoint.y]);
+      
+      // Add cubic bezier curves for each segment
+      for (let i = 1; i < allPoints.length - 2; i++) {
+        const p0 = allPoints[i - 1];
+        const p1 = allPoints[i];
+        const p2 = allPoints[i + 1];
+        const p3 = allPoints[i + 2];
+        
+        // Get control points for this segment using the same function as in the UI
+        const [cp1, cp2] = catmullToBezier(p0, p1, p2, p3);
+        
+        // Add cubic bezier curve to the sketch - mirror the X coordinates
+        // Format: cubicBezierCurveTo(end, startControlPoint, endControlPoint)
+        sketcher = sketcher.cubicBezierCurveTo(
+          [-p2.x, p2.y],        // end point with mirrored X
+          [-cp1.x, cp1.y],      // first control point with mirrored X
+          [-cp2.x, cp2.y]       // second control point with mirrored X
+        );
+      }
+      
+      // Close the shape
+      let sketch = sketcher.close();
+      
+      sketch = sketch.rotate(-obj.rotation, [0, 0]);
+      cutoutShape = sketch.translate(splineX, splineY);
+    }
+    
+    if (!cutoutShape) {
+      throw new Error('Cutout shape is undefined');
+    }
+
+    // Get the cutout depth (use the shape's depth property, limited by wall height)
+    const desiredDepth = obj.depth || 20;
+    const cutoutDepth = Math.min(desiredDepth, wallHeight);
+    
+    // Extrude the cutout shape to its depth and position it at the top of the wall
+    const cutoutSketch = cutoutShape.sketchOnPlane("XY", wallHeight - cutoutDepth);
+    return cutoutSketch.extrude(cutoutDepth) as any;
   }
 
   /**
@@ -89,85 +192,8 @@ class ReplicadWorkerImpl implements ReplicadWorkerAPI {
     
     // Process each outline as an individual extrusion to subtract
     for (const obj of outlines) {
-      let cutoutShape;
-      
-      if (obj.type === 'roundedRect') {
-        // Create a rounded rectangle at the correct position
-        // Need to adjust position relative to the grid min
-        // NOTE: We negate the X coordinate to correct the left/right flipping in 3D view
-        const rectX = -1 * (obj.position.x - min.x - width/2);
-        const rectY = obj.position.y - min.y - height/2;
-        
-        // First create the basic shape
-        let rectShape = replicad.drawRoundedRectangle(
-          obj.width, 
-          obj.height,
-          obj.radius
-        );
-        
-        rectShape = rectShape.rotate(-obj.rotation, [0, 0]);
-        cutoutShape = rectShape.translate(rectX, rectY);
-      } else if (obj.type === 'spline') {
-        // Create a proper spline path using bezier curves
-        const splinePoints = obj.points;
-        
-        // Adjust position relative to the grid min
-        // NOTE: We negate the X coordinate to correct the left/right flipping in 3D view
-        const splineX = -1 * (obj.position.x - min.x - width/2);
-        const splineY = obj.position.y - min.y - height/2;
-              
-        // Create a closed loop by creating an array of:
-        // [last point, all points, first point, second point]
-        const allPoints = [
-          splinePoints[splinePoints.length - 1],
-          ...splinePoints,
-          splinePoints[0],
-          splinePoints[1]
-        ];
-        
-        // Start with the first point - mirror the X coordinate
-        const startPoint = splinePoints[0];
-        
-        // Create a sketch starting with the first point (with mirrored X)
-        let sketcher = replicad.draw([-startPoint.x, startPoint.y]);
-        
-        // Add cubic bezier curves for each segment
-        for (let i = 1; i < allPoints.length - 2; i++) {
-          const p0 = allPoints[i - 1];
-          const p1 = allPoints[i];
-          const p2 = allPoints[i + 1];
-          const p3 = allPoints[i + 2];
-          
-          // Get control points for this segment using the same function as in the UI
-          const [cp1, cp2] = catmullToBezier(p0, p1, p2, p3);
-          
-          // Add cubic bezier curve to the sketch - mirror the X coordinates
-          // Format: cubicBezierCurveTo(end, startControlPoint, endControlPoint)
-          sketcher = sketcher.cubicBezierCurveTo(
-            [-p2.x, p2.y],        // end point with mirrored X
-            [-cp1.x, cp1.y],      // first control point with mirrored X
-            [-cp2.x, cp2.y]       // second control point with mirrored X
-          );
-        }
-        
-        // Close the shape
-        let sketch = sketcher.close();
-        
-        sketch = sketch.rotate(-obj.rotation, [0, 0]);
-        cutoutShape = sketch.translate(splineX, splineY);
-      }
-      
-      if (!cutoutShape) {
-        throw new Error('Cutout shape is undefined');
-      }
-
-      // Get the cutout depth (use the shape's depth property, limited by wall height)
-      const desiredDepth = obj.depth || 20;
-      const cutoutDepth = Math.min(desiredDepth, wallHeight);
-      
-      // Extrude the cutout shape to its depth and position it at the top of the wall
-      const cutoutSketch = cutoutShape.sketchOnPlane("XY", wallHeight - cutoutDepth);
-      const cutoutExtrusion = cutoutSketch.extrude(cutoutDepth) as any;
+      // Create and cache cutout extrusion
+      const cutoutExtrusion = this.createCutoutExtrusion(obj, min, max, wallHeight);
       
       // Subtract the extrusion from the walls
       wallsModel = wallsModel.cut(cutoutExtrusion);
