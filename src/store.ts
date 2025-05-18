@@ -175,6 +175,7 @@ export const useStore = create<State>()(
               points: points[0], // Take first contour for now
               position: position,
               rotation: 0,
+              depth: 20, // Default depth 20mm
               selected: false,
               editMode: false,
               name: `Spline ${splineIndex}`,
@@ -201,6 +202,7 @@ export const useStore = create<State>()(
               radius,
               position,
               rotation: 0,
+              depth: 20, // Default depth 20mm
               selected: false,
               editMode: false,
               name: `Rectangle ${rectIndex}`,

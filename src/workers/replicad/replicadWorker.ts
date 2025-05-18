@@ -161,9 +161,13 @@ class ReplicadWorkerImpl implements ReplicadWorkerAPI {
         throw new Error('Cutout shape is undefined');
       }
 
-      // Extrude the cutout shape and subtract from the walls
-      const cutoutSketch = cutoutShape.sketchOnPlane();
-      const cutoutExtrusion = cutoutSketch.extrude(wallHeight) as any;
+      // Get the cutout depth (use the shape's depth property, limited by wall height)
+      const desiredDepth = obj.depth || 20;
+      const cutoutDepth = Math.min(desiredDepth, wallHeight);
+      
+      // Extrude the cutout shape to its depth and position it at the top of the wall
+      const cutoutSketch = cutoutShape.sketchOnPlane("XY", wallHeight - cutoutDepth);
+      const cutoutExtrusion = cutoutSketch.extrude(cutoutDepth) as any;
       
       // Subtract the extrusion from the walls
       wallsModel = wallsModel.cut(cutoutExtrusion);
@@ -352,10 +356,10 @@ class ReplicadWorkerImpl implements ReplicadWorkerAPI {
     const outlinesHash = outlines.map(outline => {
       switch (outline.type) {
         case 'roundedRect':
-          return `rect:${outline.id}:${outline.width}:${outline.height}:${outline.radius}:${outline.position.x}:${outline.position.y}:${outline.rotation}`;
+          return `rect:${outline.id}:${outline.width}:${outline.height}:${outline.radius}:${outline.position.x}:${outline.position.y}:${outline.rotation}:${outline.depth}`;
         case 'spline': {
           const pointsHash = outline.points.map(p => `${p.x},${p.y}`).join(';');
-          return `spline:${outline.id}:${outline.position.x}:${outline.position.y}:${outline.rotation}:${pointsHash}`;
+          return `spline:${outline.id}:${outline.position.x}:${outline.position.y}:${outline.rotation}:${outline.depth}:${pointsHash}`;
         }
       }
     }).join('|');

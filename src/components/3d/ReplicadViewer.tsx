@@ -15,8 +15,30 @@ interface ReplicadViewerProps {
 const ReplicadViewer: React.FC<ReplicadViewerProps> = ({ width, height, active }) => {
   const outlines = useStore(state => state.outlines);
   
-  const [binHeight, setBinHeight] = useState<number>(20);
-  const [tempBinHeight, setTempBinHeight] = useState<number>(20);
+  // Calculate default bin height based on max depth + wall width + base thickness
+  const calculateDefaultBinHeight = (outlines: Array<{ depth?: number }>) => {
+    const BASE_HEIGHT = 4.75;
+    const WALL_WIDTH = 7.5; // Wall thickness/width
+    const UNIT_SIZE = 7; // Round up to nearest multiple of 7mm
+    // Find maximum depth among all outlines
+    const maxDepth = outlines.length > 0
+      ? Math.max(...outlines.map(o => o.depth || 20))
+      : 20;
+    
+    // Calculate default bin height (max depth + wall width + base), rounded up to nearest unit
+    const calculatedHeight = maxDepth + WALL_WIDTH + BASE_HEIGHT;
+    return Math.ceil(calculatedHeight / UNIT_SIZE) * UNIT_SIZE;
+  };
+  
+  // Calculate default height (will be used for initial value and when outlines change)
+  const defaultHeight = React.useMemo(() => calculateDefaultBinHeight(outlines), [outlines]);
+  
+  // Keep track of whether the user has manually adjusted the height
+  const [userAdjustedHeight, setUserAdjustedHeight] = useState(false);
+  
+  // Bin height state (initialize with default)
+  const [binHeight, setBinHeight] = useState<number>(defaultHeight);
+  const [tempBinHeight, setTempBinHeight] = useState<number>(defaultHeight);
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [isExportingStep, setIsExportingStep] = useState(false);
 
@@ -70,6 +92,15 @@ const ReplicadViewer: React.FC<ReplicadViewerProps> = ({ width, height, active }
     URL.revokeObjectURL(url);
   };
 
+  // Update bin height when outlines change or default height changes
+  React.useEffect(() => {
+    // Only update automatically if user hasn't manually adjusted the height
+    if (!userAdjustedHeight && !isDragging) {
+      setBinHeight(defaultHeight);
+      setTempBinHeight(defaultHeight);
+    }
+  }, [defaultHeight, userAdjustedHeight, isDragging]);
+  
   // Calculate the viewing area height
   const viewHeight = height - 60; // Leave minimal room for the slider
   const isLoading = isModelGenerating || isModelFetching;
@@ -83,6 +114,8 @@ const ReplicadViewer: React.FC<ReplicadViewerProps> = ({ width, height, active }
   const handleSliderDragStop = () => {
     setIsDragging(false);
     setBinHeight(tempBinHeight);
+    // Mark that the user has manually adjusted the height
+    setUserAdjustedHeight(true);
   };
   
   // Update temp bin height while dragging
@@ -135,7 +168,30 @@ const ReplicadViewer: React.FC<ReplicadViewerProps> = ({ width, height, active }
       {/* Controls and settings */}
       <Stack spacing={0} sx={{ mt: 0.5, py: 0.5, px: 2, border: '1px solid #eee', borderRadius: 1 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <Typography sx={{ minWidth: '120px' }}>Bin Height (mm)</Typography>
+          <Typography sx={{ minWidth: '120px' }}>
+            Bin Height (mm)
+            {userAdjustedHeight && (
+              <Tooltip title="Reset to default height based on max depth">
+                <Typography 
+                  variant="caption" 
+                  component="span" 
+                  sx={{ 
+                    ml: 1, 
+                    cursor: 'pointer', 
+                    color: 'primary.main',
+                    textDecoration: 'underline'
+                  }}
+                  onClick={() => {
+                    setBinHeight(defaultHeight);
+                    setTempBinHeight(defaultHeight);
+                    setUserAdjustedHeight(false);
+                  }}
+                >
+                  (reset)
+                </Typography>
+              </Tooltip>
+            )}
+          </Typography>
           <Slider
             value={isDragging ? tempBinHeight : binHeight}
             onChange={handleSliderChange}

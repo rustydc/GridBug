@@ -9,6 +9,7 @@ export interface BaseOutline {
   type: 'spline' | 'roundedRect';
   position: Point;
   rotation: number;
+  depth: number;     // Depth in mm for 3D cutting
   selected: boolean;
   editMode: boolean;
   color: string;  // hex color

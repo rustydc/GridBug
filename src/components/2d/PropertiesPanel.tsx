@@ -179,7 +179,8 @@ const PropertiesPanel: React.FC = () => {
     width: 0,
     height: 0,
     rotation: 0,
-    radius: 0
+    radius: 0,
+    depth: 0
   });
 
   // Calculate bin dimensions
@@ -211,7 +212,8 @@ const PropertiesPanel: React.FC = () => {
           width,
           height,
           rotation: selectedOutline.rotation,
-          radius: rectOutline.radius
+          radius: rectOutline.radius,
+          depth: selectedOutline.depth
         });
       } else {
         // For splines, use the bounds for read-only width/height
@@ -224,7 +226,8 @@ const PropertiesPanel: React.FC = () => {
           width,
           height,
           rotation: selectedOutline.rotation,
-          radius: 0
+          radius: 0,
+          depth: selectedOutline.depth
         });
       }
     }
@@ -247,6 +250,8 @@ const PropertiesPanel: React.FC = () => {
       // Ensure radius isn't larger than half the smallest dimension
       const minDimension = Math.min(properties.width, properties.height);
       validatedValue = Math.max(0, Math.min(minDimension / 2, numValue));
+    } else if (property === 'depth') {
+      validatedValue = Math.max(1, Math.min(250, numValue)); // Limit depth between 1mm and 250mm
     }
     
     // Update local state
@@ -264,6 +269,9 @@ const PropertiesPanel: React.FC = () => {
         break;
       case 'rotation':
         updates.rotation = validatedValue;
+        break;
+      case 'depth':
+        updates.depth = validatedValue;
         break;
       case 'width':
       case 'height':
@@ -485,6 +493,28 @@ const PropertiesPanel: React.FC = () => {
                 InputProps={{ endAdornment: <Typography variant="caption">mm</Typography> }}
               />
             )}
+          </Box>
+          
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+            <TextField
+              label="depth"
+              size="small"
+              type="number"
+              inputProps={{ 
+                min: 1,
+                max: 250,
+                step: 1,
+                style: { textAlign: 'right' }
+              }}
+              value={formatDisplayValue(properties.depth)}
+              onChange={(e) => handleChange('depth', e.target.value)}
+              onBlur={() => {
+                handleChange('depth', properties.depth.toString());
+              }}
+              sx={{ width: '48%' }}
+              InputLabelProps={{ shrink: true }}
+              InputProps={{ endAdornment: <Typography variant="caption">mm</Typography> }}
+            />
           </Box>
         </>
       ) : (
