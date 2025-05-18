@@ -101,12 +101,18 @@ class ReplicadWorkerImpl implements ReplicadWorkerAPI {
       const rectX = -1 * (obj.position.x - min.x - width/2);
       const rectY = obj.position.y - min.y - height/2;
       
-      // First create the basic shape
-      let rectShape = replicad.drawRoundedRectangle(
-        obj.width, 
-        obj.height,
-        obj.radius
-      );
+      let rectShape;
+      // If radius*2 equals both width and height, this is a perfect circle
+      if (obj.radius * 2 === obj.width && obj.radius * 2 === obj.height) {
+        rectShape = replicad.drawCircle(obj.radius);
+      } else {
+        // Create rounded rectangle
+        rectShape = replicad.drawRoundedRectangle(
+          obj.width, 
+          obj.height,
+          obj.radius
+        );
+      }
       
       rectShape = rectShape.rotate(-obj.rotation, [0, 0]);
       cutoutShape = rectShape.translate(rectX, rectY);
