@@ -333,7 +333,7 @@ const PropertiesPanel: React.FC = () => {
         boxSizing: 'border-box',
         display: 'flex',
         flexDirection: 'column',
-        overflow: 'auto'
+        overflow: 'hidden'
       }}
     >
       {/* Bin Status Section */}
@@ -342,28 +342,30 @@ const PropertiesPanel: React.FC = () => {
       </Typography>
       
       {/* Objects TreeView */}
-      <DndContext
-        sensors={sensors}
-        collisionDetection={closestCenter}
-        onDragEnd={handleDragEnd}
-      >
-        <SortableContext
-          items={[...outlines].reverse().map(outline => outline.id)}
-          strategy={verticalListSortingStrategy}
+      <Box sx={{ maxHeight: '300px', overflow: 'auto', mb: 1 }}>
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleDragEnd}
         >
-          <List disablePadding>
-            {[...outlines].reverse().map((outline) => (
-              <SortableItem 
-                key={outline.id}
-                id={outline.id}
-                outline={outline}
-                onSelect={handleObjectClick}
-                onRename={handleRename}
-              />
-            ))}
-          </List>
-        </SortableContext>
-      </DndContext>
+          <SortableContext
+            items={[...outlines].reverse().map(outline => outline.id)}
+            strategy={verticalListSortingStrategy}
+          >
+            <List disablePadding>
+              {[...outlines].reverse().map((outline) => (
+                <SortableItem 
+                  key={outline.id}
+                  id={outline.id}
+                  outline={outline}
+                  onSelect={handleObjectClick}
+                  onRename={handleRename}
+                />
+              ))}
+            </List>
+          </SortableContext>
+        </DndContext>
+      </Box>
       
       <Divider sx={{ mb: 1 }} />
       
