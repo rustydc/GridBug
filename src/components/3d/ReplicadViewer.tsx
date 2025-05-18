@@ -18,7 +18,7 @@ const ReplicadViewer: React.FC<ReplicadViewerProps> = ({ width, height, active }
   // Calculate default bin height based on max depth + wall width + base thickness
   const calculateDefaultBinHeight = (outlines: Array<{ depth?: number }>) => {
     const BASE_HEIGHT = 4.75;
-    const WALL_WIDTH = 7.5; // Wall thickness/width
+    const BOTTOM_THICKNESS = 1; // Wall thickness/width
     const UNIT_SIZE = 7; // Round up to nearest multiple of 7mm
     // Find maximum depth among all outlines
     const maxDepth = outlines.length > 0
@@ -26,7 +26,7 @@ const ReplicadViewer: React.FC<ReplicadViewerProps> = ({ width, height, active }
       : 20;
     
     // Calculate default bin height (max depth + wall width + base), rounded up to nearest unit
-    const calculatedHeight = maxDepth + WALL_WIDTH + BASE_HEIGHT;
+    const calculatedHeight = maxDepth + BOTTOM_THICKNESS + BASE_HEIGHT;
     return Math.ceil(calculatedHeight / UNIT_SIZE) * UNIT_SIZE;
   };
   
