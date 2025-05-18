@@ -189,9 +189,6 @@ class ReplicadWorkerImpl implements ReplicadWorkerAPI {
     max: { x: number, y: number },
     wallHeight: number
   ): any {
-    const width = max.x - min.x;
-    const height = max.y - min.y;
-    
     // Start with the base rectangle extrusion as the wall shape
     const wallsSketch = baseRect.sketchOnPlane();
     let wallsModel = wallsSketch.extrude(wallHeight) as any;
