@@ -215,24 +215,21 @@ class ReplicadWorkerImpl implements ReplicadWorkerAPI {
    * Creates a single standard base unit
    */
   private createBaseUnit_(baseHeight: number, outerDim: number, BIN_CORNER_RADIUS: number): any {
-    // Create a single base unit with beveled profile
-    // Create profiles for lofting
     const topProfile = replicad.drawRoundedRectangle(outerDim, outerDim, BIN_CORNER_RADIUS);
-    const middleProfile = topProfile.offset(-2.15/2);
-    const bottomProfile = middleProfile.offset(-0.8/2);
-    
-    // Heights for the profiles
     const topHeight = baseHeight; // Top of the base
-    const middleHeight = topHeight - 2.15; // After first 45-degree slope
-    const flatHeight = middleHeight - 1.8; // After vertical section
-    const bottomHeight = 0; // Bottom of the base
-    
-    // Create sketches at different heights using the proper replicad API
     const topSketch = topProfile.sketchOnPlane("XY", topHeight) as any;
+
+    const middleProfile = topProfile.offset(-2.15);
+    const middleHeight = topHeight - 2.15; // After first 45-degree slope
     const middleSketch = middleProfile.sketchOnPlane("XY", middleHeight) as any;
+
+    const flatHeight = middleHeight - 1.8; // After vertical section
     const flatSketch = middleProfile.sketchOnPlane("XY", flatHeight) as any;
+
+    const bottomProfile = middleProfile.offset(-0.8);
+    const bottomHeight = 0; // Bottom of the base
     const bottomSketch = bottomProfile.sketchOnPlane("XY", bottomHeight) as any;
-    
+
     // Create the base unit by lofting through the profiles
     return topSketch.loftWith([middleSketch, flatSketch, bottomSketch], {ruled: true}) as any;
   }
