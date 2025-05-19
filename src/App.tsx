@@ -131,10 +131,11 @@ const App: React.FC = () => {
       
       // Only handle Delete/Backspace when not in an input field
       if ((e.key === 'Delete' || e.key === 'Backspace') && !isInputFocused) {
-        const selected = outlines.find(o => o.selected);
-        if (selected) {
-          deleteOutline(selected.id);
-        }
+        // Get all selected outlines and delete them
+        const selectedOutlines = outlines.filter(o => o.selected);
+        selectedOutlines.forEach(outline => {
+          deleteOutline(outline.id);
+        });
       } else if (e.key === 'c' && e.ctrlKey) {
         centerView();
       } else if ((e.key === 'z' || e.key === 'Z') && e.ctrlKey) {
@@ -143,6 +144,13 @@ const App: React.FC = () => {
         } else {
           undo();
         }
+      } else if (e.key === 'a' && e.ctrlKey && !isInputFocused) {
+        // Select all outlines
+        e.preventDefault(); // Prevent default browser "select all" behavior
+        // Update all outlines to be selected
+        outlines.forEach(outline => {
+          updateOutline(outline.id, { selected: true });
+        });
       } else if (e.key === 'd' && e.ctrlKey && !isInputFocused) {
         // Duplicate the selected outline with a new color
         const selected = outlines.find(o => o.selected);
