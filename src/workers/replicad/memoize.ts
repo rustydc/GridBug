@@ -6,7 +6,6 @@ import { TopoDS_Shape } from "replicad-opencascadejs";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const OPTIONS = {
   max: 20,
-  primitive: true,
   normalizer: function (args: any[]) {
     return JSON.stringify(args);
   },

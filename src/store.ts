@@ -43,8 +43,8 @@ interface State {
     width: number;
     height: number;
     position: Point;
-  }, position?: Point) => void;
-  addRoundedRect: (width: number, height: number, radius: number, position?: Point) => void;
+  }, position?: Point, depth?: number) => void;
+  addRoundedRect: (width: number, height: number, radius: number, position?: Point, depth?: number) => void;
   updateOutline: (id: string, updates: Partial<Outline>) => void;
   selectOutline: (id: string | null, multiSelect?: boolean) => void;
   clearSelection: () => void;
@@ -165,7 +165,7 @@ export const useStore = create<State>()(
         'centerView'
       ),
 
-      addOutline: (points, bitmap, position = {x: 0, y: 0}) => set(
+      addOutline: (points, bitmap, position = {x: 0, y: 0}, depth = 20) => set(
         (state) => {
           const splineIndex = state.outlines.filter(o => o.type === 'spline').length + 1;
           const newState = {
@@ -175,7 +175,7 @@ export const useStore = create<State>()(
               points: points[0], // Take first contour for now
               position: position,
               rotation: 0,
-              depth: 20, // Default depth 20mm
+              depth: depth,
               selected: false,
               editMode: false,
               name: `Spline ${splineIndex}`,
@@ -190,7 +190,7 @@ export const useStore = create<State>()(
         'addOutline'
       ),
       
-      addRoundedRect: (width, height, radius, position = {x: 0, y: 0}) => set(
+      addRoundedRect: (width, height, radius, position = {x: 0, y: 0}, depth = 20) => set(
         (state) => {
           const rectIndex = state.outlines.filter(o => o.type === 'roundedRect').length + 1;
           const newState = {
@@ -202,7 +202,7 @@ export const useStore = create<State>()(
               radius,
               position,
               rotation: 0,
-              depth: 20, // Default depth 20mm
+              depth: depth,
               selected: false,
               editMode: false,
               name: `Rectangle ${rectIndex}`,

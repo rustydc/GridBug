@@ -171,7 +171,7 @@ class ReplicadWorkerImpl implements ReplicadWorkerAPI {
     }
 
     // Get the cutout depth (use the shape's depth property, limited by wall height)
-    const desiredDepth = obj.depth || 20;
+    const desiredDepth = obj.depth;
     const cutoutDepth = Math.min(desiredDepth, wallHeight);
     
     // Extrude the cutout shape to its depth and position it at the top of the wall
@@ -208,8 +208,7 @@ class ReplicadWorkerImpl implements ReplicadWorkerAPI {
   private createBaseUnit: (
     baseHeight: number,
     outerDim: number,
-    BIN_CORNER_RADIUS: number
-  ) => any;
+    BIN_CORNER_RADIUS: number ) => any;
   
   /**
    * Creates a single standard base unit

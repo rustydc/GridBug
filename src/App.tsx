@@ -164,7 +164,8 @@ const App: React.FC = () => {
             addOutline(
               [[...newOutline.points]], // Wrap points in array for multi-contour format
               newOutline.bitmap,
-              newOutline.position
+              newOutline.position,
+              newOutline.depth
             );
           } else if (selected.type === 'roundedRect') {
             // For rounded rectangles, create a new one with the same properties
@@ -184,7 +185,8 @@ const App: React.FC = () => {
               { 
                 x: rectOutline.position.x + 10, 
                 y: rectOutline.position.y + 10 
-              }
+              },
+              rectOutline.depth
             );
             
             // Get the id of the newly created rectangle (last in the outlines array)
